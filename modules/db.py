@@ -87,7 +87,6 @@ class Session_Metrics(SQLModel, table=True):
     time_to_first_submission_sec: int | None
     total_submissions: int
     hints_used: int = 0
-    agent_interruptions: int = 0
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Session_Feedback(SQLModel, table=True):

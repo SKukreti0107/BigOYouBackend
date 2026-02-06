@@ -1,3 +1,4 @@
+from modules.db import Problems
 import uuid
 from fastapi import Depends, HTTPException, status
 from modules.db import (
@@ -10,6 +11,7 @@ from modules.db import (
 )
 from helpers.auth_deps import get_current_user
 from sqlmodel import Session, select
+from datetime import timedelta,datetime
 
 
 def parse_session_and_user_ids(session_id: str, user_id: str) -> tuple[uuid.UUID, uuid.UUID]:
@@ -106,7 +108,6 @@ def fetch_session_metrics(db: Session, session_uuid: uuid.UUID) -> dict | None:
 		"time_to_first_submission_sec": metrics.time_to_first_submission_sec,
 		"total_submissions": metrics.total_submissions,
 		"hints_used": metrics.hints_used,
-		"agent_interruptions": metrics.agent_interruptions,
 		"updated_at": metrics.updated_at,
 	}
 
@@ -129,6 +130,26 @@ def fetch_session_feedback(db: Session, session_uuid: uuid.UUID) -> dict | None:
 		"problem_solving_score": feedback.problem_solving_score,
 		"final_verdict": feedback.final_verdict,
 		"created_at": feedback.created_at,
+	}
+
+def fetch_session_timer(db: Session, session_uuid: uuid.UUID) -> dict | None:
+	result = db.exec(
+		select(Interview_Session, Problems)
+		.where(Interview_Session.session_id == session_uuid)
+		.join(Problems, Interview_Session.problem_id == Problems.problem_id)
+	).first()
+
+	if not result:
+		return None
+
+	session_row, problem_row = result
+	remaining_time = session_row.started_at + timedelta(minutes=problem_row.expected_time) - datetime.utcnow()
+
+	return {
+		"remaining_time": remaining_time.total_seconds(),
+		"phase": session_row.phase,
+		"status": session_row.status,
+		"expected_time": problem_row.expected_time
 	}
 
 
@@ -166,6 +187,11 @@ def get_session_feedback(session_id: str, user_id: str = Depends(get_current_use
 		get_session_row(db, session_uuid, user_uuid)
 		return fetch_session_feedback(db, session_uuid)
 
+def get_session_timer(session_id: str, user_id: str = Depends(get_current_user)):
+	with Session(engine) as db:
+		session_uuid, user_uuid = parse_session_and_user_ids(session_id, user_id)
+		get_session_row(db, session_uuid, user_uuid)
+		return fetch_session_timer(db, session_uuid)
 
 def get_session_data(session_id: str, user_id: str = Depends(get_current_user)):
 	return {

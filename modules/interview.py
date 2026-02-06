@@ -8,6 +8,7 @@ from helpers.get_session_data import (
     get_session_code_states,
     get_session_metrics,
     get_session_feedback,
+    get_session_timer,
 )
 from sqlmodel import Session,select
 from sqlalchemy import func
@@ -15,6 +16,12 @@ from datetime import datetime,timezone
 
 router = APIRouter()
 
+@router.post("/interview/session/timer")
+def session_timer(session_id: str, user_id: str = Depends(get_current_user)):
+    payload = get_session_timer(session_id, user_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Session timer not found")
+    return payload["remaining_time"]
 
 @router.get("/interview/session")
 def session_overview(session_id: str, user_id: str = Depends(get_current_user)):
