@@ -62,7 +62,7 @@ def login(payload:LoginOrSignUpRequest,response:Response):
                 httponly=True,
                 samesite="none",
                 secure=True,
-                max_age=1800
+                max_age=10800
             )
             return {"message":"Login successful"}
         

@@ -139,9 +139,9 @@ def _run_phase(
         else:
             user_code = payload.code or _get_latest_code(db, session_row.session_id)
 
-        messages = _build_message_history(db, session_row.session_id, payload.message)
+        # Only pass the new user message; checkpointer accumulates history via thread_id
         response = agent.invoke(
-            {"messages": messages},
+            {"messages": [{"role": "user", "content": payload.message}]},
             config={"configurable": {"thread_id": str(session_row.session_id)}},
             context=Context(
                 session_phase=phase.value,
@@ -177,10 +177,10 @@ def agent_init(payload: AgentInitRequest, user_id: str = Depends(get_current_use
 
         problem_statement, problem_references = _load_problem_context(db, session_row)
         user_message = payload.message or "Hi"
-        messages = _build_message_history(db, session_row.session_id, user_message)
 
+        # Only pass the new user message; checkpointer accumulates history via thread_id
         response = agent.invoke(
-            {"messages": messages},
+            {"messages": [{"role": "user", "content": user_message}]},
             config={"configurable": {"thread_id": str(session_row.session_id)}},
             context=Context(
                 session_phase=InterviewPhase.PROBLEM_DISCUSSION.value,

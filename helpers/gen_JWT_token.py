@@ -1,5 +1,6 @@
 import jwt
 from datetime import datetime, timedelta,timezone
+from fastapi import HTTPException, status
 
 
 secret_key = "4c71f75d-8e64-4a36-9950-d1fee7c46ef0"
@@ -16,9 +17,15 @@ def decode_token(token):
    try:
        return jwt.decode(token, secret_key, algorithms=["HS256"])
    except jwt.ExpiredSignatureError:
-       return "Token has expired"
+       raise HTTPException(
+           status_code=status.HTTP_401_UNAUTHORIZED,
+           detail="Not authenticated"
+       )
    except jwt.InvalidTokenError:
-       return "Invalid token"
+       raise HTTPException(
+           status_code=status.HTTP_401_UNAUTHORIZED,
+           detail="Not authenticated"
+       )
 
 
 if __name__  == '__main__':

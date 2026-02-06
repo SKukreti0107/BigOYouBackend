@@ -1,11 +1,5 @@
-from services.code_runner.docker_runner import run_python
+from services.code_runner.docker_runner import run_code as execute_in_docker
 
 
 def run_code(code:str,language:str):
-    if language == "python":
-        return run_python(code)
-    
-    return {
-        "status": "error",
-        "output": f"Unsupported language: {language}"
-    }
+    return execute_in_docker(code, language)

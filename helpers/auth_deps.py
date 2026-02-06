@@ -14,6 +14,9 @@ def get_current_user(request:Request):
 
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(status_code=401)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
     
     return user_id
