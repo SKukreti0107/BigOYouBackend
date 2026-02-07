@@ -14,11 +14,11 @@ from sqlmodel import Session, select
 from datetime import timedelta,datetime
 
 
-def parse_session_and_user_ids(session_id: str, user_id: str) -> tuple[uuid.UUID, uuid.UUID]:
+def parse_session_and_user_ids(session_id: str | uuid.UUID, user_id: str | uuid.UUID) -> tuple[uuid.UUID, uuid.UUID]:
 	try:
-		session_uuid = uuid.UUID(session_id)
-		user_uuid = uuid.UUID(user_id)
-	except ValueError:
+		session_uuid = session_id if isinstance(session_id, uuid.UUID) else uuid.UUID(session_id)
+		user_uuid = user_id if isinstance(user_id, uuid.UUID) else uuid.UUID(user_id)
+	except (ValueError, AttributeError):
 		raise HTTPException(
 			status_code=status.HTTP_400_BAD_REQUEST,
 			detail="Invalid session_id or user_id",

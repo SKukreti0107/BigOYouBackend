@@ -10,11 +10,12 @@ from modules.db import (
     Session_Message,
 )
 from fastapi import APIRouter, Depends, HTTPException, status
-from helpers.get_session_data import parse_session_and_user_ids, get_session_row
+from helpers.get_session_data import parse_session_and_user_ids, get_session_row,get_session_timer
 from helpers.auth_deps import get_current_user
+from helpers.populate_sesson_metrics import populate_total_time_spent_sec
 from sqlmodel import Session, select
 from services.ai_agent.agent import agent, Context
-
+from datetime import timedelta
 
 router = APIRouter()
 
@@ -137,6 +138,11 @@ def _run_phase(
         if phase == InterviewPhase.PROBLEM_DISCUSSION:
             user_code = ""
         else:
+            if phase==InterviewPhase.REVIEW:
+                ## stop the timer from backend and store total_time in metrics
+                populate_total_time_spent_sec(session_row.session_id, user_id)
+
+
             user_code = payload.code or _get_latest_code(db, session_row.session_id)
 
         # Only pass the new user message; checkpointer accumulates history via thread_id

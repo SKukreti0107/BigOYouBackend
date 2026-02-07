@@ -83,9 +83,9 @@ class Session_Metrics(SQLModel, table=True):
         foreign_key="interview_session.session_id",
         primary_key=True
     )
-    total_time_spent_sec: int
+    total_time_spent_sec: int |None
     time_to_first_submission_sec: int | None
-    total_submissions: int
+    total_submissions: int = 0
     hints_used: int = 0
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

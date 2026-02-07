@@ -1,5 +1,5 @@
 import uuid
-from modules.db import engine,Problems,Problem_topics,User_Problem_Status,Interview_Session
+from modules.db import engine,Problems,Problem_topics,User_Problem_Status,Interview_Session,Session_Metrics
 from fastapi import APIRouter,HTTPException,Response,Depends
 from helpers.auth_deps import get_current_user
 from helpers.get_session_data import (
@@ -13,8 +13,22 @@ from helpers.get_session_data import (
 from sqlmodel import Session,select
 from sqlalchemy import func
 from datetime import datetime,timezone
+from pydantic import BaseModel
 
 router = APIRouter()
+
+# class SessionMetrics(BaseModel):
+#     session_id: str
+#     user_id: str
+#     total_time_spent_sec: int
+#     time_to_first_submission_sec: int | None
+#     total_submissions: int
+#     hints_used: int = 0
+#     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+# @router.post("/interview/session/metrics")
+# def session_metrics(session_id: str, user_id: str = Depends(get_current_user)):
+    
 
 @router.post("/interview/session/timer")
 def session_timer(session_id: str, user_id: str = Depends(get_current_user)):
@@ -86,9 +100,15 @@ def start_interview(topic:str,user_id:str=Depends(get_current_user)):
             phase="PROBLEM_DISCUSSION"
         )
 
+        session_metrics_row = Session_Metrics(
+            session_id=session_row.session_id,
+        )
+
         session.add(session_row)
+        session.add(session_metrics_row)
         session.commit()
         session.refresh(session_row)
+        session.refresh(session_metrics_row)
 
         return {
             "session_id": str(session_row.session_id),
