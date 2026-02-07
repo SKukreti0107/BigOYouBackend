@@ -91,21 +91,50 @@ When the review is complete, signal: [PHASE_READY: FEEDBACK]
 FEEDBACK_PROMPT = BASE_PROMPT + """
 CURRENT PHASE: FEEDBACK
 
+SESSION METRICS:
+- Problem Difficulty: {difficulty}
+- Expected Solve Time: {expected_time_minutes} minutes
+- Actual Time Spent: {total_time_spent_sec} seconds
+- Total Code Submissions: {total_submissions}
+- Hints Used: {hints_used}
+
 YOUR OBJECTIVE:
 Deliver a direct, honest, and critical evaluation of the candidate's entire interview performance across all phases.
 
 RULES:
 - No sugarcoating. Be direct about what went well and what didn't.
 - Base your evaluation on the FULL conversation history across all phases (discussion, coding, review).
+- Use the SESSION METRICS above to inform your evaluation (e.g., coding speed, hint dependency).
 
 STRUCTURED OUTPUT REQUIREMENT:
 - Put ONLY a brief conversational closing message in the `response` field (e.g., "Thank you for your time. Here's my evaluation.").
-- You MUST populate the `feedback` object with ALL of the following fields:
-  * `strengths`: a list of specific strengths demonstrated (e.g., ["Clear explanation of approach", "Good edge case handling"]). If none, use ["None demonstrated"].
-  * `weaknesses`: a list of specific areas for improvement (e.g., ["Failed to discuss time complexity", "Incomplete edge case analysis"]).
-  * `complexity_understanding_score`: integer 0-10 (0 = no understanding shown, 10 = exceptional mastery of time/space complexity analysis).
-  * `communication_score`: integer 0-10 (0 = could not articulate thoughts, 10 = exceptionally clear and structured communication).
-  * `problem_solving_score`: integer 0-10 (0 = no progress on the problem, 10 = optimal solution with clean code).
-  * `final_verdict`: a concise string with hiring recommendation and focus areas (e.g., "No Hire - must practice articulating approaches before coding").
-- Do NOT embed scores, strengths, weaknesses, or verdicts inside the `response` field. ALL evaluation data goes ONLY in `feedback`.
+- You MUST populate the `feedback` object with ALL of the following nested fields:
+
+  `session_summary`:
+    * `overall_score`: 0-100, computed as weighted average: problem_solving.score (40%) + complexity_analysis.score (30%) + communication.score (30%), each scaled from 0-10 to 0-100.
+    * `performance_label`: one of "Exceptional" (85-100), "Strong Performance" (70-84), "Adequate" (50-69), "Below Expectations" (25-49), "Poor" (0-24).
+    * `difficulty`: the problem difficulty from session metrics above.
+    * `time_spent_seconds`: the actual time from session metrics above.
+
+  `scores`:
+    * `problem_solving`: {{ score (0-10), notes (justification) }}
+    * `complexity_analysis`: {{ score (0-10), time_complexity (e.g. "O(n)"), space_complexity (e.g. "O(1)"), notes }}
+    * `communication`: {{ score (0-10), notes (justification) }}
+
+  `strengths`: list of {{ category, title, description, impact ("high"/"medium"/"low") }}
+    - If none demonstrated, use: [{{ category: "General", title: "None Demonstrated", description: "No strengths observed", impact: "low" }}]
+
+  `weaknesses`: list of {{ category, title, description, severity ("high"/"medium"/"low") }}
+
+  `key_metrics`:
+    * `runtime_complexity`: {{ value (e.g. "O(n)"), status ("optimal"/"acceptable"/"suboptimal") }}
+    * `memory_efficiency`: {{ value (e.g. "O(n)"), status ("optimal"/"acceptable"/"suboptimal") }}
+    * `coding_speed_percentile`: 0-100, compute as max(0, min(100, 100 - int((total_time_spent_sec / (expected_time_minutes * 60)) * 100))). Higher = faster.
+
+  `final_verdict`:
+    * `decision`: one of "Strong Hire", "Hire", "Lean Hire", "Lean No Hire", "No Hire", "Strong No Hire"
+    * `confidence`: float 0.0-1.0
+    * `summary`: one or two sentences on the verdict and what to improve
+
+- Do NOT embed ANY evaluation data inside the `response` field. ALL scores, strengths, weaknesses, metrics, and verdicts go ONLY in `feedback`.
 """

@@ -9,14 +9,14 @@ from modules.db import (
     Session_Code_State,
     Session_Message,
     Session_Feedback,
+    Session_Metrics,
 )
 from fastapi import APIRouter, Depends, HTTPException, status
 from helpers.get_session_data import parse_session_and_user_ids, get_session_row,get_session_timer
 from helpers.auth_deps import get_current_user
 from helpers.populate_sesson_metrics import populate_total_time_spent_sec
 from sqlmodel import Session, select
-from services.ai_agent.agent import phase_agents, Context
-import json
+from services.ai_agent.agent import phase_agents, Context, FeedbackContext
 from datetime import timedelta
 
 router = APIRouter()
@@ -149,14 +149,40 @@ def _run_phase(
 
         # Only pass the new user message; checkpointer accumulates history via thread_id
         active_agent = phase_agents[phase.value]
-        response = active_agent.invoke(
-            {"messages": [{"role": "user", "content": payload.message}]},
-            config={"configurable": {"thread_id": str(session_row.session_id)}},
-            context=Context(
+
+        if phase == InterviewPhase.FEEDBACK:
+            # Fetch session metrics + problem details for comprehensive feedback
+            metrics = db.exec(
+                select(Session_Metrics).where(
+                    Session_Metrics.session_id == session_row.session_id
+                )
+            ).first()
+            problem = db.exec(
+                select(Problems).where(
+                    Problems.problem_id == session_row.problem_id
+                )
+            ).first()
+            agent_context = FeedbackContext(
                 problem_statement=problem_statement,
                 problem_references=problem_references,
                 user_code=user_code,
-            ),
+                difficulty=problem.difficulty.value if problem else "Medium",
+                expected_time_minutes=problem.expected_time if problem else 30,
+                total_time_spent_sec=metrics.total_time_spent_sec or 0 if metrics else 0,
+                total_submissions=metrics.total_submissions if metrics else 0,
+                hints_used=metrics.hints_used if metrics else 0,
+            )
+        else:
+            agent_context = Context(
+                problem_statement=problem_statement,
+                problem_references=problem_references,
+                user_code=user_code,
+            )
+
+        response = active_agent.invoke(
+            {"messages": [{"role": "user", "content": payload.message}]},
+            config={"configurable": {"thread_id": str(session_row.session_id)}},
+            context=agent_context,
         )
 
         structured = response.get("structured_response")
@@ -180,12 +206,7 @@ def _run_phase(
                 db.add(
                     Session_Feedback(
                         session_id=session_row.session_id,
-                        strengths=json.dumps(fb.strengths),
-                        weaknesses=json.dumps(fb.weaknesses),
-                        complexity_understanding_score=fb.complexity_understanding_score,
-                        communication_score=fb.communication_score,
-                        problem_solving_score=fb.problem_solving_score,
-                        final_verdict=fb.final_verdict,
+                        feedback_json=fb.model_dump(),
                     )
                 )
 
