@@ -1,0 +1,61 @@
+{
+  "session_summary": {
+    "overall_score": 85,
+    "performance_label": "Strong Performance",
+    "difficulty": "Medium",
+    "time_spent_seconds": 2661
+  },
+
+  "scores": {
+    "problem_solving": {
+      "score": 8,
+      "notes": "Identified optimal approach with minor hesitation"
+    },
+    "complexity_analysis": {
+      "score": 7,
+      "time_complexity": "O(1)",
+      "space_complexity": "O(N)",
+      "notes": "Space could be optimized by node reuse"
+    },
+    "communication": {
+      "score": 6,
+      "notes": "Explained trade-offs but skipped edge-case articulation"
+    }
+  },
+
+  "strengths": [
+    {
+      "category": "Data Structures",
+      "title": "Correct LRU Design",
+      "description": "Used hashmap + doubly linked list correctly",
+      "impact": "high"
+    }
+  ],
+
+  "weaknesses": [
+    {
+      "category": "Optimization",
+      "title": "Space Overhead",
+      "description": "Extra node allocations increase memory usage",
+      "severity": "medium"
+    }
+  ],
+
+  "key_metrics": {
+    "runtime_complexity": {
+      "value": "O(1)",
+      "status": "optimal"
+    },
+    "memory_efficiency": {
+      "value": "O(N)",
+      "status": "acceptable"
+    },
+    "coding_speed_percentile": 85
+  },
+
+  "final_verdict": {
+    "decision": "Hire",
+    "confidence": 0.78,
+    "summary": "Strong fundamentals with minor communication gaps"
+  }
+}

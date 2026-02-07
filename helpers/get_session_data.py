@@ -1,5 +1,6 @@
 from modules.db import Problems
 import uuid
+import json
 from fastapi import Depends, HTTPException, status
 from modules.db import (
 	engine,
@@ -123,8 +124,8 @@ def fetch_session_feedback(db: Session, session_uuid: uuid.UUID) -> dict | None:
 
 	return {
 		"session_id": str(feedback.session_id),
-		"strengths": feedback.strengths,
-		"weaknesses": feedback.weaknesses,
+		"strengths": json.loads(feedback.strengths),
+		"weaknesses": json.loads(feedback.weaknesses),
 		"complexity_understanding_score": feedback.complexity_understanding_score,
 		"communication_score": feedback.communication_score,
 		"problem_solving_score": feedback.problem_solving_score,

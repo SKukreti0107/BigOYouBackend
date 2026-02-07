@@ -8,13 +8,15 @@ from modules.db import (
     Problem_Reference,
     Session_Code_State,
     Session_Message,
+    Session_Feedback,
 )
 from fastapi import APIRouter, Depends, HTTPException, status
 from helpers.get_session_data import parse_session_and_user_ids, get_session_row,get_session_timer
 from helpers.auth_deps import get_current_user
 from helpers.populate_sesson_metrics import populate_total_time_spent_sec
 from sqlmodel import Session, select
-from services.ai_agent.agent import agent, Context
+from services.ai_agent.agent import phase_agents, Context
+import json
 from datetime import timedelta
 
 router = APIRouter()
@@ -146,11 +148,11 @@ def _run_phase(
             user_code = payload.code or _get_latest_code(db, session_row.session_id)
 
         # Only pass the new user message; checkpointer accumulates history via thread_id
-        response = agent.invoke(
+        active_agent = phase_agents[phase.value]
+        response = active_agent.invoke(
             {"messages": [{"role": "user", "content": payload.message}]},
             config={"configurable": {"thread_id": str(session_row.session_id)}},
             context=Context(
-                session_phase=phase.value,
                 problem_statement=problem_statement,
                 problem_references=problem_references,
                 user_code=user_code,
@@ -170,6 +172,23 @@ def _run_phase(
             payload.message,
             agent_text,
         )
+
+        # Persist structured feedback to Session_Feedback table
+        if phase == InterviewPhase.FEEDBACK and structured is not None:
+            fb = getattr(structured, "feedback", None)
+            if fb is not None:
+                db.add(
+                    Session_Feedback(
+                        session_id=session_row.session_id,
+                        strengths=json.dumps(fb.strengths),
+                        weaknesses=json.dumps(fb.weaknesses),
+                        complexity_understanding_score=fb.complexity_understanding_score,
+                        communication_score=fb.communication_score,
+                        problem_solving_score=fb.problem_solving_score,
+                        final_verdict=fb.final_verdict,
+                    )
+                )
+
         db.add(session_row)
         db.commit()
 
@@ -185,11 +204,10 @@ def agent_init(payload: AgentInitRequest, user_id: str = Depends(get_current_use
         user_message = payload.message or "Hi"
 
         # Only pass the new user message; checkpointer accumulates history via thread_id
-        response = agent.invoke(
+        response = phase_agents[InterviewPhase.PROBLEM_DISCUSSION.value].invoke(
             {"messages": [{"role": "user", "content": user_message}]},
             config={"configurable": {"thread_id": str(session_row.session_id)}},
             context=Context(
-                session_phase=InterviewPhase.PROBLEM_DISCUSSION.value,
                 problem_statement=problem_statement,
                 problem_references=problem_references,
                 user_code="",
