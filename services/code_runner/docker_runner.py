@@ -4,9 +4,12 @@ import uuid
 
 client = docker.from_env()
 
-# Use a shared volume path that's accessible by the host Docker daemon
-CODE_EXECUTION_PATH = "/tmp/code-execution"
-DOCKER_VOLUME_NAME = os.getenv("DOCKER_VOLUME_NAME","backend_code-execution")
+# Path inside this container where code files are written
+CODE_EXECUTION_PATH = os.getenv("CODE_EXECUTION_PATH", "/tmp/code-execution")
+# Named Docker volume used to share code files with sibling code-runner containers.
+# When set, the spawned container mounts this volume instead of a host bind mount.
+# Must match the actual Docker volume name (e.g. "bigoyu_code-execution").
+CODE_VOLUME_NAME = os.getenv("CODE_VOLUME_NAME", "")
 
 LANGUAGE_CONFIGS = {
     "python": {
@@ -43,12 +46,20 @@ def run_code(code: str, language: str, timeout: int = 5) -> dict:
         with open(code_path, "w") as f:
             f.write(code)
 
+        # Use named volume if available (production), else fall back to bind mount (local dev)
+        if CODE_VOLUME_NAME:
+            volume_config = {
+                CODE_VOLUME_NAME: {"bind": "/tmp/code-execution", "mode": "ro"}
+            }
+        else:
+            volume_config = {
+                CODE_EXECUTION_PATH: {"bind": "/tmp/code-execution", "mode": "ro"}
+            }
+
         container = client.containers.run(
             image=config["image"],
             command=config["command"](job_id, config["extension"]),
-            volumes={
-                DOCKER_VOLUME_NAME: {"bind": "/tmp/code-execution", "mode": "ro"}
-            },
+            volumes=volume_config,
             network_disabled=True,
             mem_limit="128m",
             cpu_quota=50000,

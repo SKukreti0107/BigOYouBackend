@@ -1,3 +1,5 @@
+name: bigoyu
+
 services:
   redis:
     image: redis:7-alpine
@@ -17,11 +19,12 @@ services:
       - "8000:8000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # Mount Docker socket
-      - code-execution:/tmp/code-execution          # Shared volume for code execution
+      - code-execution:/tmp/code-execution          # Named volume for code execution
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - DOCKER_VOLUME_NAME=backend_code-execution
+      - CODE_EXECUTION_PATH=/tmp/code-execution
+      - CODE_VOLUME_NAME=bigoyu_code-execution
     depends_on:
       redis:
         condition: service_healthy
@@ -32,11 +35,12 @@ services:
     command: rq worker code_queue --url redis://redis:6379
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # Mount Docker socket
-      - code-execution:/tmp/code-execution          # Shared volume for code execution
+      - code-execution:/tmp/code-execution          # Named volume for code execution
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - DOCKER_VOLUME_NAME=backend_code-execution
+      - CODE_EXECUTION_PATH=/tmp/code-execution
+      - CODE_VOLUME_NAME=bigoyu_code-execution
     depends_on:
       redis:
         condition: service_healthy
