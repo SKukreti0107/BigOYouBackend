@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 from pydantic import BaseModel
 from modules.db import (
     engine,
@@ -27,12 +28,20 @@ class PhaseRequest(BaseModel):
     message: str
     code: str | None = None
     language: str | None = None
+    role: Literal["user", "system"] = "user"
 
 
 class AgentInitRequest(BaseModel):
     session_id: str
-    message: str | None = "Hi"
+    message: str | None = "Start the interview"
+    role: Literal["user", "system"] = "system"
 
+
+def _format_message_for_agent(message: str, role: str) -> str:
+    """Prefix platform/system messages so the LLM doesn't attribute them to the candidate."""
+    if role == "system":
+        return f"[SYSTEM EVENT] {message}"
+    return message
 
 def _get_session_or_404(db: Session, session_id: str, user_id: str) -> Interview_Session:
     session_uuid, user_uuid = parse_session_and_user_ids(session_id, user_id)
@@ -94,14 +103,15 @@ def _persist_messages(
     db: Session,
     session_id: uuid.UUID,
     phase: InterviewPhase,
-    user_message: str,
+    message: str,
     agent_message: str,
+    role: str,
 ):
     db.add(
         Session_Message(
             session_id=session_id,
-            role="user",
-            content=user_message,
+            role=role,
+            content=message,
             phase=phase,
         )
     )
@@ -179,8 +189,11 @@ def _run_phase(
                 user_code=user_code,
             )
 
+        formatted_message = _format_message_for_agent(payload.message, payload.role)
+
+        # Gemini supports a single system instruction; keep role=user and mark system events in content.
         response = active_agent.invoke(
-            {"messages": [{"role": "user", "content": payload.message}]},
+            {"messages": [{"role": "user", "content": formatted_message}]},
             config={"configurable": {"thread_id": str(session_row.session_id)}},
             context=agent_context,
         )
@@ -197,6 +210,7 @@ def _run_phase(
             phase,
             payload.message,
             agent_text,
+            payload.role
         )
 
         # Persist structured feedback to Session_Feedback table
@@ -225,8 +239,10 @@ def agent_init(payload: AgentInitRequest, user_id: str = Depends(get_current_use
         user_message = payload.message or "Hi"
 
         # Only pass the new user message; checkpointer accumulates history via thread_id
+        formatted_message = _format_message_for_agent(user_message, payload.role)
+
         response = phase_agents[InterviewPhase.PROBLEM_DISCUSSION.value].invoke(
-            {"messages": [{"role": "user", "content": user_message}]},
+            {"messages": [{"role": "user", "content": formatted_message}]},
             config={"configurable": {"thread_id": str(session_row.session_id)}},
             context=Context(
                 problem_statement=problem_statement,
@@ -247,6 +263,7 @@ def agent_init(payload: AgentInitRequest, user_id: str = Depends(get_current_use
             InterviewPhase.PROBLEM_DISCUSSION,
             user_message,
             agent_text,
+            payload.role
         )
         db.add(session_row)
         db.commit()
