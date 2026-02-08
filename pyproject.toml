@@ -18,4 +18,5 @@ dependencies = [
     "langchain-groq>=1.1.1",
     "rq>=2.6.1",
     "docker>=7.1.0",
+    "langgraph-checkpoint-postgres>=3.0.4",
 ]

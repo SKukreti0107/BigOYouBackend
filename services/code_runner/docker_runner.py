@@ -6,6 +6,7 @@ client = docker.from_env()
 
 # Use a shared volume path that's accessible by the host Docker daemon
 CODE_EXECUTION_PATH = "/tmp/code-execution"
+DOCKER_VOLUME_NAME = os.getenv("DOCKER_VOLUME_NAME","backend_code-execution")
 
 LANGUAGE_CONFIGS = {
     "python": {
@@ -46,7 +47,7 @@ def run_code(code: str, language: str, timeout: int = 5) -> dict:
             image=config["image"],
             command=config["command"](job_id, config["extension"]),
             volumes={
-                "backend_code-execution": {"bind": "/tmp/code-execution", "mode": "ro"}
+                DOCKER_VOLUME_NAME: {"bind": "/tmp/code-execution", "mode": "ro"}
             },
             network_disabled=True,
             mem_limit="128m",
