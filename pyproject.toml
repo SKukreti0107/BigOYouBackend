@@ -19,4 +19,6 @@ dependencies = [
     "rq>=2.6.1",
     "docker>=7.1.0",
     "langgraph-checkpoint-postgres>=3.0.4",
+    "ipython>=9.10.0",
+    "langsmith>=0.6.6",
 ]

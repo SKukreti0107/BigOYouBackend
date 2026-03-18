@@ -2,8 +2,6 @@ import docker
 import os
 import uuid
 
-client = docker.from_env()
-
 # Path inside this container where code files are written
 CODE_EXECUTION_PATH = os.getenv("CODE_EXECUTION_PATH", "/tmp/code-execution")
 # Named Docker volume used to share code files with sibling code-runner containers.
@@ -33,6 +31,11 @@ LANGUAGE_CONFIGS = {
 def run_code(code: str, language: str, timeout: int = 5) -> dict:
     if language not in LANGUAGE_CONFIGS:
         return {"status": "error", "output": f"Unsupported language: {language}"}
+
+    try:
+        client = docker.from_env()
+    except Exception as e:
+        return {"status": "error", "output": f"Docker is not running or accessible: {str(e)}"}
 
     config = LANGUAGE_CONFIGS[language]
     job_id = str(uuid.uuid4())
