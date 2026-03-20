@@ -1,4 +1,4 @@
-from ai_agent.schemas import CriterionAssessment
+from ..schemas import CriterionAssessment
 from typing import Dict,Any
 
 def _merge_criterion(prev: Any, curr: CriterionAssessment) -> Dict[str, Any]:

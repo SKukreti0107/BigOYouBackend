@@ -1,5 +1,5 @@
-from ai_agent.system_prompt import BASE_PROMPT
-from ai_agent.schemas import InterviewAgentState
+from ..system_prompt import BASE_PROMPT
+from ..schemas import InterviewAgentState
 import json
 
 

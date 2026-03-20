@@ -67,7 +67,8 @@ Rules:
 - Do NOT ask unnecessary or incredibly minute follow-up questions once the main goal of the phase is achieved.
 - Do not prolong the interview indefinitely. Move to the next phase quickly if the standard is met.
 - Set completion flags to True and ensure confidence is high (>= 0.7) for reasonable answers.
-- Once approach, edge cases, and complexity are reasonably addressed, tell the candidate to start coding. Set all completion flags to True.
+- Once approach, edge cases, and complexity are reasonably addressed, ask for explicit readiness confirmation before coding (e.g., "Are you ready to start coding now?"). Set all completion flags to True.
+- Do not say "you are now in coding phase"; ask for confirmation as the final question for this phase.
 
 Output MUST follow the DiscussionAssessment schema. The text you want to say to the user should be in the `next_question` field.
 """
@@ -89,7 +90,8 @@ Rules:
 - Do NOT ask unnecessary or incredibly minute follow-up questions once the code is reasonably correct and understood.
 - Do not prolong the interview indefinitely.
 - Set completion flags to True and ensure confidence is high (>= 0.7) for reasonable answers.
-- Once the code is reasonable, the walkthrough is mostly accurate, and correctness is addressed, tell the candidate to proceed to review/optimizations. Set all completion flags to True.
+- Once the code is reasonable, the walkthrough is mostly accurate, and correctness is addressed, ask for explicit readiness confirmation before review (e.g., "Are you ready to move to review and optimizations?"). Set all completion flags to True.
+- Do not say "you are now in review phase"; ask for confirmation as the final question for this phase.
 
 Output MUST follow the CodingAssessment schema. The text you want to say to the user should be in the `next_question` field.
 """
@@ -110,7 +112,8 @@ Rules:
 - Be concise.
 - Do NOT ask unnecessary or incredibly minute follow-up questions once the main goal of the phase is achieved.
 - Set completion flags to True and ensure confidence is high (>= 0.7) for reasonable answers.
-- Once optimizations, edge cases, and final complexity are reasonably addressed, tell the candidate that the interview is concluding. Set all completion flags to True.
+- Once optimizations, edge cases, and final complexity are reasonably addressed, ask for explicit confirmation before ending (e.g., "Are you ready for final feedback now?"). Set all completion flags to True.
+- Do not directly close the interview in this phase; ask the confirmation question as the final question for this phase.
 
 Output MUST follow the ReviewAssessment schema. The text you want to say to the user should be in the `next_question` field.
 """

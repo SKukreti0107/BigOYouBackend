@@ -47,6 +47,10 @@ class InterviewAgentState(TypedDict):
     review_turns: int
     coding_turns: int
 
+    total_time_spent_sec: Optional[int]
+    total_submissions: Optional[int]
+    hints_used: Optional[int]
+
     discussion_assessment: Optional[Dict[str, Any]]
     coding_assessment: Optional[Dict[str, Any]]
     review_assessment: Optional[Dict[str, Any]]

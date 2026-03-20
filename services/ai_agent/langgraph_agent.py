@@ -5,10 +5,10 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
 
 
-from ai_agent.schemas import *
-from ai_agent.system_prompt import *
-from ai_agent.helpers.prompt_builder import *
-from ai_agent.helpers.internal_phase_assessment import _merge_criterion,_is_complete
+from .schemas import *
+from .system_prompt import *
+from .helpers.prompt_builder import *
+from .helpers.internal_phase_assessment import _merge_criterion,_is_complete
 
 
 #for dev in mem later persistent db
@@ -234,12 +234,21 @@ def feedback_phase_node(state: InterviewAgentState) -> dict:
     discussion_assessment = state.get("discussion_assessment") or {}
     coding_assessment = state.get("coding_assessment") or {}
     review_assessment = state.get("review_assessment") or {}
+    
+    total_time = state.get("total_time_spent_sec") or 0
+    total_submissions = state.get("total_submissions") or 0
+    hints_used = state.get("hints_used") or 0
 
     context_message = HumanMessage(
         content=
+        f"**Internal Assessment State:**\n"
         f"Discussion Assessment: {discussion_assessment}\n"
         f"Coding Assessment: {coding_assessment}\n"
-        f"Review Assessment: {review_assessment}"
+        f"Review Assessment: {review_assessment}\n\n"
+        f"**Session Metrics:**\n"
+        f"Time spent (seconds): {total_time}\n"
+        f"Total Submissions Evaluated: {total_submissions}\n"
+        f"Hints used: {hints_used}\n"
     )
 
     res = base_llm.with_structured_output(

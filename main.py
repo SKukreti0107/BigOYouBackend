@@ -3,7 +3,7 @@ from modules.auth import router as auth_router
 from modules.problems import router as problem_router
 from modules.interview import router as interview_router
 from modules.execute_code import router as code_execute_router
-from modules.interview_agent import router as agent_router
+from modules.new_interview_agent import router as agent_router
 from modules.db import create_db_and_table
 from fastapi.middleware.cors import CORSMiddleware
 import os 
