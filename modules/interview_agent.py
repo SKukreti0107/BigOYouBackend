@@ -77,16 +77,16 @@ def _load_problem_context(db: Session, session_row: Interview_Session) -> tuple[
     return problem.statement, references
 
 
-def _build_message_history(db: Session, session_id: uuid.UUID, user_message: str) -> list[dict]:
-    history = db.exec(
-        select(Session_Message)
-        .where(Session_Message.session_id == session_id)
-        .order_by(Session_Message.created_at)
-    ).all()
+# def _build_message_history(db: Session, session_id: uuid.UUID, user_message: str) -> list[dict]:
+#     history = db.exec(
+#         select(Session_Message)
+#         .where(Session_Message.session_id == session_id)
+#         .order_by(Session_Message.created_at)
+#     ).all()
 
-    messages = [{"role": m.role, "content": m.content} for m in history]
-    messages.append({"role": "user", "content": user_message})
-    return messages
+#     messages = [{"role": m.role, "content": m.content} for m in history]
+#     messages.append({"role": "user", "content": user_message})
+#     return messages
 
 
 def _get_latest_code(db: Session, session_id: uuid.UUID) -> str:
