@@ -25,6 +25,30 @@ from services.ai_agent.helpers.agent_runners import run_interview_turn,get_last_
 router = APIRouter()
 
 
+@router.get("/interview/agent_messages")
+def agent_messages(session_id: str, user_id: str = Depends(get_current_user)):
+    """Read chat messages directly from the LangGraph persistent checkpoint."""
+    config = {"configurable": {"thread_id": session_id}}
+    try:
+        snapshot = graph.get_state(config)
+        if not snapshot or not hasattr(snapshot, "values"):
+            return []
+
+        messages = snapshot.values.get("messages", [])
+        result = []
+        for msg in messages:
+            role = "ai" if msg.type == "ai" else "user"
+            # Skip system-injected context messages (internal assessment state)
+            content = str(msg.content or "")
+            if content.startswith("**Internal Assessment State:**"):
+                continue
+            result.append({"role": role, "content": content})
+        return result
+    except Exception as e:
+        print(f"Error reading agent messages: {e}")
+        return []
+
+
 #-------------------------------------------------------------------
 #Schemas and helpers 
 class PhaseRequest(BaseModel):

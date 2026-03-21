@@ -2,7 +2,8 @@ from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres import PostgresSaver
+import os
 
 
 from .schemas import *
@@ -11,9 +12,15 @@ from .helpers.prompt_builder import *
 from .helpers.internal_phase_assessment import _merge_criterion,_is_complete
 
 
-#for dev in mem later persistent db
-checkpointer = MemorySaver()
 load_dotenv()
+
+# Persistent checkpointer backed by Neon Postgres
+DB_URL = os.getenv("DB_URL")
+
+import psycopg
+_pg_conn = psycopg.connect(DB_URL, autocommit=True)
+checkpointer = PostgresSaver(conn=_pg_conn)
+checkpointer.setup()  # auto-creates checkpoint tables if they don't exist
 
 base_llm = ChatGoogleGenerativeAI(
     model = "gemini-flash-lite-latest", # for testing 
@@ -293,7 +300,7 @@ def feedback_phase_node(state: InterviewAgentState) -> dict:
 #-------------------------------------------------------
 #compiling the graph:
 
-def create_interview_graph(checkpointer_obj: MemorySaver):
+def create_interview_graph(checkpointer_obj):
     workflow = StateGraph(InterviewAgentState)
 
     workflow.add_node("interview_init_node", interview_init_node)
