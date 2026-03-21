@@ -156,4 +156,7 @@ Rules:
 - Do not include private chain-of-thought.
 - Never ask another follow-up question.
 - Populate all fields of the FeedbackResponseFormat schema accurately.
+- If `Time expired` is true in the provided metrics context, explicitly state that the candidate did not complete within the expected time.
+- If `Extra time used` is true, apply a stricter final assessment and avoid inflated overall scores.
+- If the candidate skipped major phases or could not complete key requirements, keep problem-solving and communication scores low and evidence-based.
 """

@@ -35,6 +35,30 @@ def session_timer(session_id: str, user_id: str = Depends(get_current_user)):
     payload = get_session_timer(session_id, user_id)
     if not payload:
         raise HTTPException(status_code=404, detail="Session timer not found")
+
+    # Include extension state from LangGraph so refreshes stay timer-consistent.
+    try:
+        from services.ai_agent.langgraph_agent import graph
+
+        config = {"configurable": {"thread_id": session_id}}
+        snapshot = graph.get_state(config)
+        values = snapshot.values if snapshot and hasattr(snapshot, "values") else {}
+
+        # If the session was already ended by timeout, return 0
+        session_ended_by = values.get("session_ended_by") or ""
+        if session_ended_by == "TIMEOUT_END":
+            return 0
+
+        extension_count = int(values.get("extension_count") or 0)
+
+        if extension_count > 0:
+            extension_seconds = extension_count * 15 * 60
+            payload["remaining_time"] = payload["remaining_time"] + extension_seconds
+            payload["extension_count"] = extension_count
+    except Exception:
+        # Timer endpoint should not fail just because graph state lookup failed.
+        pass
+
     return payload["remaining_time"]
 
 @router.get("/interview/session")

@@ -33,12 +33,22 @@ class PhaseRequest(BaseModel):
     code: str | None = None
     language: str | None = None
     role: Literal["user", "system"] = "user"
+    time_expired: bool | None = None
+    extra_time_used: bool | None = None
+    extension_count: int | None = None
+    session_ended_by: str | None = None
 
 
 class AgentInitRequest(BaseModel):
     session_id: str
     message: str | None = "[SYSTEM EVENT] Start the interview"
     role: Literal["user", "system"] = "system"
+
+
+class TimeoutActionRequest(BaseModel):
+    session_id: str
+    action: Literal["REVIEW", "END_FEEDBACK", "EXTEND"]
+    extension_minutes: int = 15
 
 
 def _get_session_or_404(db: Session, session_id: str, user_id: str) -> Interview_Session:
@@ -141,9 +151,77 @@ def _sync_runtime_state_before_turn(payload: PhaseRequest):
     if payload.code:
         state_updates["user_code"] = payload.code
 
+    if payload.time_expired is not None:
+        state_updates["time_expired"] = payload.time_expired
+
+    if payload.extra_time_used is not None:
+        state_updates["extra_time_used"] = payload.extra_time_used
+
+    if payload.extension_count is not None:
+        state_updates["extension_count"] = payload.extension_count
+
+    if payload.session_ended_by is not None:
+        state_updates["session_ended_by"] = payload.session_ended_by
+
     if state_updates:
         config = {"configurable": {"thread_id": payload.session_id}}
         graph.update_state(config, state_updates)
+
+
+@router.post("/interview/timeout_action")
+def timeout_action(payload: TimeoutActionRequest, user_id: str = Depends(get_current_user)):
+    with Session(engine) as db:
+        session_row = _get_session_or_404(db, payload.session_id, user_id)
+
+    config = {"configurable": {"thread_id": payload.session_id}}
+    snapshot = graph.get_state(config)
+    values = snapshot.values if snapshot and hasattr(snapshot, "values") else {}
+
+    extension_count = int(values.get("extension_count") or 0)
+    max_extensions = 1
+
+    if payload.action == "EXTEND":
+        if extension_count >= max_extensions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Extension limit reached",
+            )
+
+        next_count = extension_count + 1
+        graph.update_state(
+            config,
+            {
+                "time_expired": True,
+                "extra_time_used": True,
+                "extension_count": next_count,
+                "session_ended_by": "TIMEOUT_EXTEND",
+            },
+        )
+
+        return {
+            "action": "EXTEND",
+            "allowed": True,
+            "extension_seconds": payload.extension_minutes * 60,
+            "extension_count": next_count,
+            "max_extensions": max_extensions,
+        }
+
+    graph.update_state(
+        config,
+        {
+            "time_expired": True,
+            "extra_time_used": bool(values.get("extra_time_used") or False),
+            "extension_count": extension_count,
+            "session_ended_by": "TIMEOUT_END",
+        },
+    )
+
+    return {
+        "action": payload.action,
+        "allowed": True,
+        "extension_count": extension_count,
+        "max_extensions": max_extensions,
+    }
 
 
 #-------------------------------------------------------------------
@@ -218,6 +296,18 @@ def feedback(payload: PhaseRequest, user_id: str = Depends(get_current_user)):
         latest_code = _get_latest_code(db, session_row.session_id)
         if latest_code:
             state_updates["user_code"] = latest_code
+
+        if payload.time_expired is not None:
+            state_updates["time_expired"] = payload.time_expired
+
+        if payload.extra_time_used is not None:
+            state_updates["extra_time_used"] = payload.extra_time_used
+
+        if payload.extension_count is not None:
+            state_updates["extension_count"] = payload.extension_count
+
+        if payload.session_ended_by is not None:
+            state_updates["session_ended_by"] = payload.session_ended_by
 
         if state_updates:
             config = {"configurable": {"thread_id": payload.session_id}}

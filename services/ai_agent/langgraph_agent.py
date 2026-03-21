@@ -94,6 +94,11 @@ def problem_discussion_phase_node(state: InterviewAgentState) -> dict:
     }
 
 def discussion_router(state: InterviewAgentState):
+    # Shortcut: if the session was ended by timeout, route accordingly
+    session_ended_by = state.get("session_ended_by") or ""
+    if session_ended_by == "TIMEOUT_END":
+        return "FEEDBACK"
+
     discussion_phase_flags = state.get("discussion_assessment") or {}
     if not isinstance(discussion_phase_flags, dict):
         return "PROBLEM_DISCUSSION"
@@ -152,6 +157,11 @@ def coding_phase_node(state: InterviewAgentState) -> dict:
 
 
 def coding_router(state: InterviewAgentState):
+    # Shortcut: if the session was ended by timeout, route accordingly
+    session_ended_by = state.get("session_ended_by") or ""
+    if session_ended_by == "TIMEOUT_END":
+        return "FEEDBACK"
+
     coding_phase_flags = state.get("coding_assessment") or {}
     if not isinstance(coding_phase_flags, dict):
         return "CODING"
@@ -208,6 +218,11 @@ def review_phase_node(state: InterviewAgentState) -> dict:
     }
 
 def review_router(state: InterviewAgentState):
+    # Shortcut: if the session was ended by timeout, skip directly to feedback
+    session_ended_by = state.get("session_ended_by") or ""
+    if session_ended_by == "TIMEOUT_END":
+        return "FEEDBACK"
+
     review_phase_flags = state.get("review_assessment") or {}
     if not isinstance(review_phase_flags, dict):
         return "REVIEW"
@@ -238,6 +253,10 @@ def feedback_phase_node(state: InterviewAgentState) -> dict:
     total_time = state.get("total_time_spent_sec") or 0
     total_submissions = state.get("total_submissions") or 0
     hints_used = state.get("hints_used") or 0
+    time_expired = bool(state.get("time_expired") or False)
+    extra_time_used = bool(state.get("extra_time_used") or False)
+    extension_count = int(state.get("extension_count") or 0)
+    session_ended_by = state.get("session_ended_by") or "NORMAL"
 
     context_message = HumanMessage(
         content=
@@ -249,6 +268,10 @@ def feedback_phase_node(state: InterviewAgentState) -> dict:
         f"Time spent (seconds): {total_time}\n"
         f"Total Submissions Evaluated: {total_submissions}\n"
         f"Hints used: {hints_used}\n"
+        f"Time expired: {time_expired}\n"
+        f"Extra time used: {extra_time_used}\n"
+        f"Extension count: {extension_count}\n"
+        f"Session ended by: {session_ended_by}\n"
     )
 
     res = base_llm.with_structured_output(
@@ -289,6 +312,7 @@ def create_interview_graph(checkpointer_obj: MemorySaver):
         path_map={
             "CODING": "coding_phase_node",
             "PROBLEM_DISCUSSION": "problem_discussion_phase_node",
+            "FEEDBACK": "feedback_phase_node",
         },
     )
 
@@ -298,6 +322,7 @@ def create_interview_graph(checkpointer_obj: MemorySaver):
         path_map={
             "REVIEW": "review_phase_node",
             "CODING": "coding_phase_node",
+            "FEEDBACK": "feedback_phase_node",
         },
     )
 
