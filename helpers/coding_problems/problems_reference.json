@@ -1,0 +1,229 @@
+{
+  "references": [
+    {
+      "title": "Two Sum",
+      "optimal_approach": "Use a hash map to store seen values and their indices; for each number, check if target - num exists.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(n)",
+      "key_insights": "A single pass with complement lookup avoids nested loops.",
+      "common_pitfalls": "Using the same element twice; forgetting to store index after check.",
+      "pseudocode": "map = {}\nfor i, x in nums:\n  if target-x in map: return [map[target-x], i]\n  map[x] = i"
+    },
+    {
+      "title": "Best Time to Buy and Sell Stock",
+      "optimal_approach": "Track the minimum price so far and update max profit each day.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(1)",
+      "key_insights": "The best sell day for a day is based on the minimum price before it.",
+      "common_pitfalls": "Selling before buying; resetting min price incorrectly.",
+      "pseudocode": "min_price = inf\nmax_profit = 0\nfor price in prices:\n  min_price = min(min_price, price)\n  max_profit = max(max_profit, price - min_price)\nreturn max_profit"
+    },
+    {
+      "title": "Move Zeroes",
+      "optimal_approach": "Use a slow pointer to place non-zero elements in order, then fill the rest with zeros.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(1)",
+      "key_insights": "Stable compaction preserves non-zero order in one pass.",
+      "common_pitfalls": "Extra copies; losing the relative order of non-zeros.",
+      "pseudocode": "write = 0\nfor x in nums:\n  if x != 0: nums[write++] = x\nwhile write < n: nums[write++] = 0"
+    },
+    {
+      "title": "Maximum Subarray (Kadane)",
+      "optimal_approach": "Kadane’s algorithm: keep current best ending here and global max.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(1)",
+      "key_insights": "If current sum is negative, restart at current element.",
+      "common_pitfalls": "Initializing to 0 instead of first element for all-negative arrays.",
+      "pseudocode": "best = nums[0]\ncur = nums[0]\nfor x in nums[1:]:\n  cur = max(x, cur + x)\n  best = max(best, cur)\nreturn best"
+    },
+    {
+      "title": "Container With Most Water",
+      "optimal_approach": "Two pointers at ends, move the shorter line inward each step.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(1)",
+      "key_insights": "Area limited by shorter height; moving taller can’t help.",
+      "common_pitfalls": "Moving the taller pointer; off-by-one in width.",
+      "pseudocode": "l=0; r=n-1; best=0\nwhile l<r:\n  best=max(best, (r-l)*min(h[l],h[r]))\n  if h[l]<h[r]: l+=1\n  else: r-=1\nreturn best"
+    },
+    {
+      "title": "Valid Anagram",
+      "optimal_approach": "Count character frequencies and compare.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(1)",
+      "key_insights": "Equal length and identical counts means anagram.",
+      "common_pitfalls": "Ignoring length check; using sorting with higher cost.",
+      "pseudocode": "if len(s)!=len(t): return false\ncount = array[26]=0\nfor c in s: count[idx(c)]++\nfor c in t: count[idx(c)]--\nreturn all zeros"
+    },
+    {
+      "title": "Longest Substring Without Repeating Characters",
+      "optimal_approach": "Sliding window with last-seen index map.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(min(n, alphabet))",
+      "key_insights": "Move left pointer to max(last_seen+1, left).",
+      "common_pitfalls": "Not guarding against moving left backwards; using set with slow removals.",
+      "pseudocode": "last = {}\nleft = 0\nbest = 0\nfor right, ch in s:\n  if ch in last: left = max(left, last[ch]+1)\n  last[ch] = right\n  best = max(best, right-left+1)\nreturn best"
+    },
+    {
+      "title": "Group Anagrams",
+      "optimal_approach": "Use a hashmap keyed by character frequency (or sorted string) to group words.",
+      "time_complexity": "O(n * k)",
+      "space_complexity": "O(n * k)",
+      "key_insights": "Anagrams share the same frequency signature.",
+      "common_pitfalls": "Using mutable lists as map keys; inconsistent key format.",
+      "pseudocode": "groups = {}\nfor word in strs:\n  key = count_signature(word)\n  groups[key].append(word)\nreturn groups.values()"
+    },
+    {
+      "title": "Longest Palindromic Substring",
+      "optimal_approach": "Expand around each center (single and double).",
+      "time_complexity": "O(n^2)",
+      "space_complexity": "O(1)",
+      "key_insights": "Every palindrome is defined by its center; expand to find max length.",
+      "common_pitfalls": "Only checking odd-length centers; off-by-one in expansion.",
+      "pseudocode": "best = [0,0]\nfor i in range(n):\n  best = max_len(best, expand(i,i))\n  best = max_len(best, expand(i,i+1))\nreturn s[best[0]:best[1]+1]"
+    },
+    {
+      "title": "Valid Parentheses",
+      "optimal_approach": "Use a stack to match opening brackets with closing brackets.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(n)",
+      "key_insights": "Last opened must be the first closed.",
+      "common_pitfalls": "Not checking empty stack; mismatched bracket types.",
+      "pseudocode": "stack = []\nfor ch in s:\n  if ch in opens: stack.push(ch)\n  else:\n    if stack empty or not match(stack.pop(), ch): return false\nreturn stack empty"
+    },
+    {
+      "title": "Reverse Linked List",
+      "optimal_approach": "Iteratively reverse pointers using prev and curr.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(1)",
+      "key_insights": "Rewire next pointers as you traverse.",
+      "common_pitfalls": "Losing the next node; not returning new head.",
+      "pseudocode": "prev = null\ncurr = head\nwhile curr:\n  nxt = curr.next\n  curr.next = prev\n  prev = curr\n  curr = nxt\nreturn prev"
+    },
+    {
+      "title": "Detect Cycle in Linked List",
+      "optimal_approach": "Floyd’s tortoise and hare pointers.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(1)",
+      "key_insights": "If cycle exists, fast and slow pointers will meet.",
+      "common_pitfalls": "Not checking fast and fast.next for null.",
+      "pseudocode": "slow = head; fast = head\nwhile fast and fast.next:\n  slow = slow.next\n  fast = fast.next.next\n  if slow == fast: return true\nreturn false"
+    },
+    {
+      "title": "Merge Two Sorted Lists",
+      "optimal_approach": "Merge with a dummy head and two pointers.",
+      "time_complexity": "O(n+m)",
+      "space_complexity": "O(1)",
+      "key_insights": "Always take smaller head and advance that list.",
+      "common_pitfalls": "Forgetting to append remaining nodes.",
+      "pseudocode": "dummy = Node(0)\ntail = dummy\nwhile l1 and l2:\n  if l1.val <= l2.val: tail.next = l1; l1 = l1.next\n  else: tail.next = l2; l2 = l2.next\n  tail = tail.next\n tail.next = l1 or l2\nreturn dummy.next"
+    },
+    {
+      "title": "Remove Nth Node From End",
+      "optimal_approach": "Two-pointer technique with a dummy head and a gap of n.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(1)",
+      "key_insights": "When fast hits end, slow is just before target.",
+      "common_pitfalls": "Not using a dummy for removing head; off-by-one in gap.",
+      "pseudocode": "dummy.next = head\nfast = dummy; slow = dummy\nfor i in 1..n: fast = fast.next\nwhile fast.next:\n  fast = fast.next; slow = slow.next\nslow.next = slow.next.next\nreturn dummy.next"
+    },
+    {
+      "title": "Intersection of Two Linked Lists",
+      "optimal_approach": "Two pointers that switch heads when reaching the end.",
+      "time_complexity": "O(n+m)",
+      "space_complexity": "O(1)",
+      "key_insights": "Equalize path lengths by switching, pointers meet at intersection or null.",
+      "common_pitfalls": "Comparing values instead of nodes.",
+      "pseudocode": "pA = headA; pB = headB\nwhile pA != pB:\n  pA = pA.next if pA else headB\n  pB = pB.next if pB else headA\nreturn pA"
+    },
+    {
+      "title": "Min Stack",
+      "optimal_approach": "Maintain a parallel stack of current minimums.",
+      "time_complexity": "O(1) per op",
+      "space_complexity": "O(n)",
+      "key_insights": "Min at each depth allows constant-time getMin.",
+      "common_pitfalls": "Not syncing min stack on pop.",
+      "pseudocode": "push(x): stack.push(x); minStack.push(min(x, minStack.top))\npop(): stack.pop(); minStack.pop()\ngetMin(): return minStack.top"
+    },
+    {
+      "title": "Next Greater Element",
+      "optimal_approach": "Monotonic decreasing stack; iterate 2n for circular array.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(n)",
+      "key_insights": "Stack stores indices whose next greater hasn’t been found.",
+      "common_pitfalls": "Only iterating once; forgetting modulo indexing.",
+      "pseudocode": "ans = [-1]*n\nstack = []\nfor i in range(2*n):\n  idx = i % n\n  while stack and nums[stack[-1]] < nums[idx]:\n    ans[stack.pop()] = nums[idx]\n  if i < n: stack.push(idx)\nreturn ans"
+    },
+    {
+      "title": "Evaluate Reverse Polish Notation",
+      "optimal_approach": "Use a stack and apply operators as they appear.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(n)",
+      "key_insights": "Each operator consumes two operands from the stack.",
+      "common_pitfalls": "Integer division rules; operand order.",
+      "pseudocode": "stack = []\nfor t in tokens:\n  if t is number: push(t)\n  else: b=pop(); a=pop(); push(apply(a,b,t))\nreturn pop()"
+    },
+    {
+      "title": "Daily Temperatures",
+      "optimal_approach": "Monotonic decreasing stack of indices.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(n)",
+      "key_insights": "When a warmer day appears, resolve all colder days on stack.",
+      "common_pitfalls": "Stacking temperatures instead of indices; wrong distance calc.",
+      "pseudocode": "ans=[0]*n\nstack=[]\nfor i in range(n):\n  while stack and temps[i] > temps[stack[-1]]:\n    j = stack.pop()\n    ans[j] = i - j\n  stack.push(i)\nreturn ans"
+    },
+    {
+      "title": "Implement Queue Using Stacks",
+      "optimal_approach": "Two stacks: in-stack for push, out-stack for pop/peek.",
+      "time_complexity": "Amortized O(1)",
+      "space_complexity": "O(n)",
+      "key_insights": "Only pour from in to out when out is empty.",
+      "common_pitfalls": "Pouring on every operation; forgetting empty check.",
+      "pseudocode": "push(x): in.push(x)\npeek/pop: if out empty: move all from in to out; then out.top/pop\nempty: in empty and out empty"
+    },
+    {
+      "title": "Climbing Stairs",
+      "optimal_approach": "Fibonacci-style DP with two variables.",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(1)",
+      "key_insights": "ways[n] = ways[n-1] + ways[n-2].",
+      "common_pitfalls": "Incorrect base cases for n=1 or n=2.",
+      "pseudocode": "if n<=2: return n\na=1; b=2\nfor i in 3..n:\n  a,b = b,a+b\nreturn b"
+    },
+    {
+      "title": "House Robber",
+      "optimal_approach": "DP with include/exclude (or two rolling vars).",
+      "time_complexity": "O(n)",
+      "space_complexity": "O(1)",
+      "key_insights": "At each house, choose max of robbing it or skipping it.",
+      "common_pitfalls": "Not handling empty list; mixing state updates.",
+      "pseudocode": "rob=0; skip=0\nfor x in nums:\n  new_rob = skip + x\n  skip = max(skip, rob)\n  rob = new_rob\nreturn max(rob, skip)"
+    },
+    {
+      "title": "Longest Increasing Subsequence",
+      "optimal_approach": "Patience sorting with binary search on tails.",
+      "time_complexity": "O(n log n)",
+      "space_complexity": "O(n)",
+      "key_insights": "tails[len] stores smallest tail of increasing subseq of length len.",
+      "common_pitfalls": "Using <= in binary search, which breaks strictness.",
+      "pseudocode": "tails=[]\nfor x in nums:\n  i = lower_bound(tails, x)\n  if i == len(tails): tails.append(x)\n  else: tails[i] = x\nreturn len(tails)"
+    },
+    {
+      "title": "Coin Change",
+      "optimal_approach": "Bottom-up DP over amount.",
+      "time_complexity": "O(amount * coins)",
+      "space_complexity": "O(amount)",
+      "key_insights": "dp[a] = min(dp[a], dp[a-coin]+1).",
+      "common_pitfalls": "Not initializing dp with inf; forgetting to return -1 when unreachable.",
+      "pseudocode": "dp=[inf]*(amount+1)\ndp[0]=0\nfor a in 1..amount:\n  for c in coins:\n    if a>=c: dp[a]=min(dp[a], dp[a-c]+1)\nreturn dp[amount] if dp[amount]!=inf else -1"
+    },
+    {
+      "title": "Longest Common Subsequence",
+      "optimal_approach": "2D DP over prefixes of both strings.",
+      "time_complexity": "O(n*m)",
+      "space_complexity": "O(n*m)",
+      "key_insights": "If chars match, take 1 + diagonal; else max of left/top.",
+      "common_pitfalls": "Off-by-one indexes; using subsequence vs substring logic.",
+      "pseudocode": "dp = zeros(n+1, m+1)\nfor i in 1..n:\n  for j in 1..m:\n    if s1[i-1]==s2[j-1]: dp[i][j]=dp[i-1][j-1]+1\n    else: dp[i][j]=max(dp[i-1][j], dp[i][j-1])\nreturn dp[n][m]"
+    }
+  ]
+}

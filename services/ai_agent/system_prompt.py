@@ -156,6 +156,9 @@ Rules:
 - Do not include private chain-of-thought.
 - Never ask another follow-up question.
 - Populate all fields of the FeedbackResponseFormat schema accurately.
+- complexity_analysis.time_complexity MUST be a non-empty Big-O string (examples: O(1), O(n), O(n log n), O(n^2)).
+- complexity_analysis.space_complexity MUST be a non-empty Big-O string (examples: O(1), O(n), O(n^2)).
+- Never output null, empty strings, or "unknown" for complexity fields; infer from the final code when the user did not state complexity explicitly.
 - If `Time expired` is true in the provided metrics context, explicitly state that the candidate did not complete within the expected time.
 - If `Extra time used` is true, apply a stricter final assessment and avoid inflated overall scores.
 - If the candidate skipped major phases or could not complete key requirements, keep problem-solving and communication scores low and evidence-based.

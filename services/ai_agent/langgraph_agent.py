@@ -2,7 +2,6 @@ from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.checkpoint.postgres import PostgresSaver
 import os
 
 
@@ -14,17 +13,13 @@ from .helpers.internal_phase_assessment import _merge_criterion,_is_complete
 
 load_dotenv()
 
-# Persistent checkpointer backed by Neon Postgres
-DB_URL = os.getenv("DB_URL")
-
-import psycopg
-_pg_conn = psycopg.connect(DB_URL, autocommit=True)
-checkpointer = PostgresSaver(conn=_pg_conn)
-checkpointer.setup()  # auto-creates checkpoint tables if they don't exist
+_pg_conn = None
+checkpointer = None
+graph = None
 
 base_llm = ChatGoogleGenerativeAI(
-    model = "gemini-flash-lite-latest", # for testing 
-    # model = "gemini-3.1-flash-lite-preview" # for prod
+    # model = "gemini-flash-lite-latest", # for testing 
+    model = "gemini-3.1-flash-lite-preview" # for prod
 )
 
 #---------------------------------------------------------------------------------------
@@ -353,4 +348,57 @@ def create_interview_graph(checkpointer_obj):
     )
 
 
-graph = create_interview_graph(checkpointer)
+def init_agent_graph() -> bool:
+    global _pg_conn, checkpointer, graph
+
+    if graph is not None:
+        return True
+
+    db_url = os.getenv("DB_URL")
+    if not db_url:
+        print("AI agent init skipped: DB_URL is not configured")
+        return False
+
+    try:
+        from langgraph.checkpoint.postgres import PostgresSaver
+        import psycopg
+
+        _pg_conn = psycopg.connect(db_url, autocommit=True)
+        checkpointer = PostgresSaver(conn=_pg_conn)
+        checkpointer.setup()
+        graph = create_interview_graph(checkpointer)
+        return True
+    except Exception as exc:
+        print(f"AI agent init failed: {exc}")
+        graph = None
+        checkpointer = None
+        if _pg_conn is not None:
+            try:
+                _pg_conn.close()
+            except Exception:
+                pass
+            _pg_conn = None
+        return False
+
+
+def get_graph():
+    if graph is None:
+        raise RuntimeError("AI agent graph is unavailable")
+    return graph
+
+
+def is_agent_available() -> bool:
+    return graph is not None
+
+
+def close_agent_graph() -> None:
+    global _pg_conn, checkpointer, graph
+
+    graph = None
+    checkpointer = None
+    if _pg_conn is not None:
+        try:
+            _pg_conn.close()
+        except Exception:
+            pass
+    _pg_conn = None
