@@ -1,17 +1,18 @@
 from fastapi import FastAPI
-from modules.auth import router as auth_router
-from modules.problems import router as problem_router
-from modules.interview import router as interview_router
-from modules.execute_code import router as code_execute_router
-from modules.interview_agent import router as agent_router
+from routers.auth import router as auth_router
+from routers.problems import router as problem_router
+from routers.interview import router as interview_router
+from routers.execute_code import router as code_execute_router
+from routers.interview_agent import router as agent_router
 from modules.db import create_db_and_table
 from fastapi.middleware.cors import CORSMiddleware
 import os 
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
+from services.ai_agent.langgraph_agent import close_agent_graph, init_agent_graph
 
 from modules.db import engine
-from helpers.redis_client import redis_conn
+from helpers.redis.redis_client import redis_conn
 load_dotenv()
 
 
@@ -22,9 +23,13 @@ DEBUG = ENV == "dev"
 @asynccontextmanager
 async def lifespan(app:FastAPI):
     create_db_and_table()
+    app.state.ai_agent_available = init_agent_graph()
+    if not app.state.ai_agent_available:
+        print("AI agent unavailable at startup; interview-agent endpoints will return 503")
     yield
     #any shutdown cleanup can go here 
     print("Shutting down application....")
+    close_agent_graph()
     engine.dispose()
     redis_conn.close()
 
