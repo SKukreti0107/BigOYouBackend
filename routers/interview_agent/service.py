@@ -17,6 +17,10 @@ from modules.db import (
     Session_Metrics,
 )
 from modules.schemas import PhaseRequest, AgentInitRequest, TimeoutActionRequest
+from services.ai_agent.helpers.message_normalizer import (
+    normalize_message_role,
+    normalize_message_text,
+)
 from services.ai_agent.schemas import InterviewAgentState
 
 
@@ -30,8 +34,8 @@ def get_agent_messages(graph, session_id: str) -> list[dict]:
         messages = snapshot.values.get("messages", [])
         result = []
         for msg in messages:
-            role = "ai" if msg.type == "ai" else "user"
-            content = str(msg.content or "")
+            role = normalize_message_role(getattr(msg, "type", ""))
+            content = normalize_message_text(getattr(msg, "content", ""))
             if content.startswith("**Internal Assessment State:**"):
                 continue
             result.append({"role": role, "content": content})

@@ -41,13 +41,6 @@ def get_session_row(db: Session, session_uuid: uuid.UUID, user_uuid: uuid.UUID) 
 
 	return session_row
 
-def get_all_sessions(db:Session,user_id:uuid.UUID):
-	stmt = select(Interview_Session).where(
-		Interview_Session.user_id == user_id
-	)
-
-	all_sessions = db.exec(stmt)
-
 	
 
 def fetch_session_overview(session_row: Interview_Session) -> dict:

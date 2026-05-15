@@ -4,6 +4,9 @@ from routers.problems import router as problem_router
 from routers.interview import router as interview_router
 from routers.execute_code import router as code_execute_router
 from routers.interview_agent import router as agent_router
+from routers.session import router as session_router
+from routers.dashboard import router as dashboard_router
+
 from modules.db import create_db_and_table
 from fastapi.middleware.cors import CORSMiddleware
 import os 
@@ -58,6 +61,8 @@ app.include_router(problem_router)
 app.include_router(interview_router)
 app.include_router(code_execute_router)
 app.include_router(agent_router)
+app.include_router(session_router)
+app.include_router(dashboard_router)
 
 if __name__ == "__main__":
     import uvicorn

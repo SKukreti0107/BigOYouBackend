@@ -5,7 +5,7 @@ from helpers.session.get_session_data import get_all_sessions
 router = APIRouter()
 
 
-# @router.post("/sessions_history")
-# def all_user_sessions(user_id:str = Depends(get_current_user)):
-#     get_all_sessions(user_id)
+@router.post("/get_sessions_history")
+def user_sessions_history(user_id:str = Depends(get_current_user)):
+    return get_all_sessions(user_id)
 

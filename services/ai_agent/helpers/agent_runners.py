@@ -1,11 +1,13 @@
 from langchain_core.messages import HumanMessage
 
+from .message_normalizer import normalize_message_text
+
 
 def get_last_ai_message(state):
     messages = state.get("messages", [])
     for msg in reversed(messages):
-        if msg.type == "ai":
-            return msg.content
+        if str(getattr(msg, "type", "")).lower() == "ai":
+            return normalize_message_text(getattr(msg, "content", ""))
     return ""
 
 
