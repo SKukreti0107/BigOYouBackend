@@ -133,18 +133,27 @@ def persist_turn_data(
                 fb = res.get("feedback")
                 if fb:
                     fb_dict = fb.model_dump() if hasattr(fb, "model_dump") else fb
+                    final_score = None
+                    if isinstance(fb_dict, dict):
+                        final_score = fb_dict.get("overall_score")
+                        if final_score is None:
+                            session_summary = fb_dict.get("session_summary")
+                            if isinstance(session_summary, dict):
+                                final_score = session_summary.get("overall_score")
                     existing_fb = db.exec(
                         select(Session_Feedback)
                         .where(Session_Feedback.session_id == session_row.session_id)
                     ).first()
                     if existing_fb:
                         existing_fb.feedback_json = fb_dict
+                        existing_fb.final_score = final_score
                         db.add(existing_fb)
                     else:
                         db.add(
                             Session_Feedback(
                                 session_id=session_row.session_id,
                                 feedback_json=fb_dict,
+                                final_score=final_score
                             )
                         )
 

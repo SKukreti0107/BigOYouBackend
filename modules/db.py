@@ -7,7 +7,7 @@ import uuid
 from enum import Enum
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Column
+from sqlalchemy import Column, inspect, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 conn_string = os.getenv('DB_URL')
@@ -96,6 +96,7 @@ class Session_Feedback(SQLModel, table=True):
         foreign_key="interview_session.session_id",
         primary_key=True
     )
+    final_score: int | None
     feedback_json: dict = Field(sa_column=Column(JSONB, nullable=False))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -120,6 +121,4 @@ engine = create_engine(
 
 def create_db_and_table():
     SQLModel.metadata.create_all(engine)
-
-
 

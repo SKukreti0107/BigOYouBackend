@@ -19,7 +19,7 @@ graph = None
 
 base_llm = ChatGoogleGenerativeAI(
     # model = "gemini-flash-lite-latest", # for testing 
-    model = "gemini-3.1-flash-lite-preview" # for prod
+    model = "gemini-3.1-flash-lite" # for prod
 )
 
 #---------------------------------------------------------------------------------------
