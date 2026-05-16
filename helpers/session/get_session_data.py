@@ -198,3 +198,10 @@ def get_session_data(session_id: str, user_id: str = Depends(get_current_user)):
 		"feedback": get_session_feedback(session_id, user_id),
 	}
 
+def fetch_last_session_id(user_id: uuid.UUID = Depends(get_current_user)):
+	with Session(engine) as db:
+		query = select(Interview_Session.session_id).where(Interview_Session.user_id == user_id).order_by(Interview_Session.user_id.desc()).limit(1)
+		result = db.execute(query).scalar_one_or_none()
+		if result:
+			return result
+		return None
