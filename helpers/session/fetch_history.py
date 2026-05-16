@@ -1,5 +1,6 @@
 import uuid
 from sqlmodel import Session, select
+from sqlalchemy import func
 from modules.db import (
     Interview_Session,
     Problems,
@@ -7,7 +8,20 @@ from modules.db import (
 )
 
 
-def fetch_sessions_history(db: Session, user_id: uuid.UUID) -> list[dict]:
+def fetch_sessions_history(
+    db: Session,
+    user_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 10,
+) -> tuple[list[dict], int]:
+    offset = (page - 1) * page_size
+    total = db.exec(
+        select(
+            func.count(Interview_Session.session_id)
+        )
+        .where(Interview_Session.user_id == user_id)
+    ).one()
+    
     stmt = (
         select(
             Interview_Session.session_id.label("id"),
@@ -21,10 +35,12 @@ def fetch_sessions_history(db: Session, user_id: uuid.UUID) -> list[dict]:
         .join(Session_Feedback, Interview_Session.session_id == Session_Feedback.session_id)
         .where(Interview_Session.user_id == user_id)
         .order_by(Session_Feedback.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
     )
 
     result = db.exec(stmt).all()
-    return [dict(row._mapping) for row in result]
+    return [dict(row._mapping) for row in result], total
 
 #returns last interview feedback -> strengths and weaknesses
 def fetch_last_interview_feedback(db: Session, session_id: uuid.UUID) -> dict:
