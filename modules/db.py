@@ -114,7 +114,7 @@ class Problem_Reference(SQLModel, table=True):
 
 engine = create_engine(
     conn_string,
-    echo=True,
+    echo=False,
     pool_pre_ping=True,
     pool_recycle=3600
     )

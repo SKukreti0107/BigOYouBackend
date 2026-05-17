@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 
+from helpers.session.end_interview import clear_interview_checkpoints
 
 from .schemas import *
 from .system_prompt import *
@@ -343,7 +344,6 @@ def create_interview_graph(checkpointer_obj):
             "problem_discussion_phase_node",
             "coding_phase_node",
             "review_phase_node",
-            "feedback_phase_node",
         ],
     )
 
@@ -389,6 +389,10 @@ def get_graph():
 
 def is_agent_available() -> bool:
     return graph is not None
+
+
+def clear_agent_checkpoints(session_id: str) -> bool:
+    return clear_interview_checkpoints(checkpointer, session_id)
 
 
 def close_agent_graph() -> None:

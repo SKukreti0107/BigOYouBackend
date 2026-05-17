@@ -4,7 +4,7 @@ from sqlmodel import Session
 from helpers.auth.auth_deps import get_current_user
 from modules.db import engine
 from modules.schemas import PhaseRequest, AgentInitRequest, TimeoutActionRequest
-from services.ai_agent.langgraph_agent import get_graph
+from services.ai_agent.langgraph_agent import get_graph, clear_agent_checkpoints
 from services.ai_agent.helpers.agent_runners import run_interview_turn
 
 from .service import (
@@ -133,4 +133,5 @@ def feedback(
 
     res = run_interview_turn(graph=graph, thread_id=payload.session_id, user_input=payload.message)
     persist_turn_data(payload, user_id, res)
+    clear_agent_checkpoints(payload.session_id)
     return res
