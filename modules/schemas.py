@@ -52,3 +52,41 @@ class TimeoutActionRequest(BaseModel):
     session_id: str
     action: Literal["REVIEW", "END_FEEDBACK", "EXTEND"]
     extension_minutes: int = 15
+
+
+# ── Admin Schemas ──
+
+class ProblemCreateRequest(BaseModel):
+    title: str
+    statement: str
+    example: str
+    difficulty: Literal["Easy", "Medium", "Hard"]
+    expected_time: int
+    topics: list[str] = []
+
+
+class ProblemUpdateRequest(BaseModel):
+    title: str | None = None
+    statement: str | None = None
+    example: str | None = None
+    difficulty: Literal["Easy", "Medium", "Hard"] | None = None
+    expected_time: int | None = None
+    topics: list[str] | None = None
+
+
+class ReferenceCreateRequest(BaseModel):
+    optimal_approach: str
+    time_complexity: str
+    space_complexity: str
+    key_insights: str
+    common_pitfalls: str | None = None
+    pseudocode: str | None = None
+
+
+class ReferenceUpdateRequest(BaseModel):
+    optimal_approach: str | None = None
+    time_complexity: str | None = None
+    space_complexity: str | None = None
+    key_insights: str | None = None
+    common_pitfalls: str | None = None
+    pseudocode: str | None = None

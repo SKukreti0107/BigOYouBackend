@@ -6,6 +6,7 @@ from routers.execute_code import router as code_execute_router
 from routers.interview_agent import router as agent_router
 from routers.session import router as session_router
 from routers.dashboard import router as dashboard_router
+from routers.admin import router as admin_router
 
 from modules.db import create_db_and_table
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,7 +40,7 @@ async def lifespan(app:FastAPI):
 app = FastAPI(title="BigO(you)",version="1.0.0",lifespan=lifespan)
 
 
-origins = os.getenv("ALLOWED_ORIGINS","http://127.0.0.1:5173").split(",")
+origins = os.getenv("ALLOWED_ORIGINS","http://localhost:5173").split(",")
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,6 +64,7 @@ app.include_router(code_execute_router)
 app.include_router(agent_router)
 app.include_router(session_router)
 app.include_router(dashboard_router)
+app.include_router(admin_router)
 
 if __name__ == "__main__":
     import uvicorn
