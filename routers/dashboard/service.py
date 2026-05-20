@@ -30,5 +30,6 @@ def fetch_last_interview_feedback(user_id: str) -> dict:
 
         return {
             "strengths": feedback_json.get("strengths", []),
-            "weaknesses": feedback_json.get("weaknesses", [])
+            "weaknesses": feedback_json.get("weaknesses", []),
+            "score": feedback_json.get("overall_score", 0)
         }
