@@ -6,7 +6,8 @@ from .service import (
     fetch_quick_stats,
     fetch_score_trend,
     fetch_weak_areas,
-    fetch_last_interview_feedback
+    fetch_last_interview_feedback,
+    fetch_paused_session
 )
 import uuid
 
@@ -33,3 +34,15 @@ async def get_dashboard(user_id: str):
             "weak_areas": weak_areas,
             "last_interview_feedback": last_interview_feedback
         }
+
+
+@router.get("/dashboard/paused-session")
+async def get_paused_session(user_id: str):
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid user_id format")
+
+    with Session(engine) as db:
+        paused = fetch_paused_session(db, user_uuid)
+        return {"paused_session": paused}

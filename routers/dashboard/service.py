@@ -1,12 +1,15 @@
 from modules.db import engine, Session_Feedback, Interview_Session, Problems
 from sqlmodel import Session, select
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 def calculate_streak(db: Session, user_uuid: uuid.UUID) -> int:
+    """Count consecutive days with at least one COMPLETED interview (has feedback)."""
     try:
+        # Only count sessions that have feedback (i.e., actually completed)
         stmt = (
             select(Interview_Session.started_at)
+            .join(Session_Feedback, Session_Feedback.session_id == Interview_Session.session_id)
             .where(Interview_Session.user_id == user_uuid)
             .order_by(Interview_Session.started_at.asc())
         )
@@ -15,7 +18,7 @@ def calculate_streak(db: Session, user_uuid: uuid.UUID) -> int:
             return 0
 
         # Extract dates and convert to unique sorted list of date objects
-        unique_dates = sorted(list({d.started_at.date() for d in results}))
+        unique_dates = sorted(list({d.date() for d in results}))
         if not unique_dates:
             return 0
 
@@ -44,14 +47,20 @@ def calculate_streak(db: Session, user_uuid: uuid.UUID) -> int:
         return 0
 
 def fetch_quick_stats(db: Session, user_uuid: uuid.UUID) -> dict:
+    """Only count sessions that have feedback as 'completed' interviews."""
     try:
-        sessions_stmt = select(Interview_Session).where(Interview_Session.user_id == user_uuid)
-        sessions = db.exec(sessions_stmt).all()
-        interviews_taken = len(sessions)
+        # Completed sessions = sessions that have a Session_Feedback row
+        completed_stmt = (
+            select(Interview_Session)
+            .join(Session_Feedback, Session_Feedback.session_id == Interview_Session.session_id)
+            .where(Interview_Session.user_id == user_uuid)
+        )
+        completed_sessions = db.exec(completed_stmt).all()
+        interviews_taken = len(completed_sessions)
 
-        # Count interviews this week (last 7 days)
+        # Count completed interviews this week (last 7 days)
         seven_days_ago = datetime.utcnow() - timedelta(days=7)
-        week_sessions = [s for s in sessions if s.started_at >= seven_days_ago]
+        week_sessions = [s for s in completed_sessions if s.started_at >= seven_days_ago]
         interviews_this_week = len(week_sessions)
 
         # Get feedback scores
@@ -76,8 +85,8 @@ def fetch_quick_stats(db: Session, user_uuid: uuid.UUID) -> dict:
             avg_score = 0.0
             score_improvement = 0.0
 
-        # Calculate Top Topics
-        topics = [s.topic for s in sessions if s.topic]
+        # Calculate Top Topics (only from completed sessions)
+        topics = [s.topic for s in completed_sessions if s.topic]
         from collections import Counter
         topic_counts = Counter(topics)
         top_topics = [topic for topic, _ in topic_counts.most_common(3)]
@@ -203,3 +212,80 @@ def fetch_last_interview_feedback(db: Session, user_uuid: uuid.UUID) -> dict:
     except Exception as e:
         print(f"Error fetching last feedback: {e}")
         return {}
+
+
+def fetch_paused_session(db: Session, user_uuid: uuid.UUID) -> dict | None:
+    """Find an ACTIVE session that the user disconnected from.
+
+    A session is considered "paused" when:
+      - status == ACTIVE
+      - phase != FEEDBACK (not yet finished)
+    
+    The session remains recoverable for 30 minutes after the interview
+    timer would have naturally expired.  After that we auto-terminate.
+    """
+    try:
+        stmt = (
+            select(Interview_Session, Problems)
+            .join(Problems, Interview_Session.problem_id == Problems.problem_id)
+            .where(
+                Interview_Session.user_id == user_uuid,
+                Interview_Session.status == "ACTIVE",
+                Interview_Session.phase != "FEEDBACK",
+            )
+            .order_by(Interview_Session.started_at.desc())
+            .limit(1)
+        )
+        result = db.exec(stmt).first()
+        if not result:
+            return None
+
+        session_row, problem_row = result
+
+        # Compute when the interview timer expires
+        # (started_at + expected_time in minutes)
+        timer_end = session_row.started_at + timedelta(minutes=problem_row.expected_time)
+
+        # Try to account for LangGraph extensions if available
+        try:
+            from services.ai_agent.langgraph_agent import get_graph
+            graph = get_graph()
+            config = {"configurable": {"thread_id": str(session_row.session_id)}}
+            snapshot = graph.get_state(config)
+            values = snapshot.values if snapshot and hasattr(snapshot, "values") else {}
+            extension_count = int(values.get("extension_count") or 0)
+            if extension_count > 0:
+                timer_end += timedelta(minutes=extension_count * 15)
+        except Exception:
+            pass
+
+        # Add 30-min grace period
+        grace_deadline = timer_end + timedelta(minutes=30)
+        now = datetime.now(timezone.utc)
+
+        # Handle naive datetimes from DB
+        if session_row.started_at.tzinfo is None:
+            now = datetime.utcnow()
+
+        seconds_remaining = (grace_deadline - now).total_seconds()
+
+        if seconds_remaining <= 0:
+            # Grace period expired → auto-terminate
+            session_row.status = "TERMINATED"
+            db.add(session_row)
+            db.commit()
+            return None
+
+        return {
+            "session_id": str(session_row.session_id),
+            "topic": session_row.topic,
+            "phase": session_row.phase,
+            "problem_title": problem_row.title,
+            "difficulty": problem_row.difficulty,
+            "expected_time": problem_row.expected_time,
+            "seconds_remaining": int(seconds_remaining),
+            "started_at": session_row.started_at.isoformat(),
+        }
+    except Exception as e:
+        print(f"Error fetching paused session: {e}")
+        return None

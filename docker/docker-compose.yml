@@ -14,7 +14,9 @@ services:
       retries: 5
 
   backend:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
       - "8000:8000"
     volumes:
@@ -31,7 +33,9 @@ services:
     restart: unless-stopped
 
   worker:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     command: rq worker code_queue --url redis://redis:6379
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # Mount Docker socket

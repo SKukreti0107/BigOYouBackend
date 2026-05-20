@@ -43,8 +43,8 @@ def get_session_row(db: Session, session_uuid: uuid.UUID, user_uuid: uuid.UUID) 
 
 	
 
-def fetch_session_overview(session_row: Interview_Session) -> dict:
-	return {
+def fetch_session_overview(session_row: Interview_Session, problem_row: Problems = None) -> dict:
+	overview = {
 		"session_id": str(session_row.session_id),
 		"user_id": str(session_row.user_id),
 		"problem_id": str(session_row.problem_id),
@@ -53,6 +53,16 @@ def fetch_session_overview(session_row: Interview_Session) -> dict:
 		"status": session_row.status,
 		"phase": session_row.phase,
 	}
+	if problem_row:
+		overview["problem"] = {
+			"problem_id": str(problem_row.problem_id),
+			"title": problem_row.title,
+			"statement": problem_row.statement,
+			"example": problem_row.example,
+			"difficulty": problem_row.difficulty,
+			"expected_time": problem_row.expected_time,
+		}
+	return overview
 
 
 def fetch_session_messages(db: Session, session_uuid: uuid.UUID) -> list[dict]:
@@ -153,7 +163,8 @@ def get_session_overview(session_id: str, user_id: str = Depends(get_current_use
 	with Session(engine) as db:
 		session_uuid, user_uuid = parse_session_and_user_ids(session_id, user_id)
 		session_row = get_session_row(db, session_uuid, user_uuid)
-		return fetch_session_overview(session_row)
+		problem_row = db.get(Problems, session_row.problem_id)
+		return fetch_session_overview(session_row, problem_row)
 
 
 def get_session_messages(session_id: str, user_id: str = Depends(get_current_user)):
