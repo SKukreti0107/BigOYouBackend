@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage
 from sqlmodel import Session, select
 
 from helpers.session.get_session_data import parse_session_and_user_ids, get_session_row
-from helpers.session.populate_sesson_metrics import populate_total_time_spent_sec
+from helpers.session.update_sesson_metrics import populate_total_time_spent_sec
 from modules.db import (
     engine,
     InterviewPhase,
@@ -171,6 +171,9 @@ def sync_runtime_state_before_turn(payload: PhaseRequest, graph):
     if payload.code:
         state_updates["user_code"] = payload.code
 
+    if payload.exit_clicked is not None:
+        state_updates["exit_clicked"] = payload.exit_clicked
+
     if payload.time_expired is not None:
         state_updates["time_expired"] = payload.time_expired
 
@@ -275,3 +278,5 @@ def handle_timeout_action(graph, payload: TimeoutActionRequest) -> dict:
         "extension_count": extension_count,
         "max_extensions": max_extensions,
     }
+
+

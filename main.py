@@ -39,7 +39,7 @@ async def lifespan(app:FastAPI):
 app = FastAPI(title="BigO(you)",version="1.0.0",lifespan=lifespan)
 
 
-origins = os.getenv("ALLOWED_ORIGINS","http://localhost:5173").split(",")
+origins = os.getenv("ALLOWED_ORIGINS","http://127.0.0.1:5173").split(",")
 
 app.add_middleware(
     CORSMiddleware,

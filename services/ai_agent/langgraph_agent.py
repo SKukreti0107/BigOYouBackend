@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 
-from helpers.session.end_interview import clear_interview_checkpoints
+from helpers.session.end_interview_session import clear_interview_checkpoints
 
 from .schemas import *
 from .system_prompt import *
@@ -97,6 +97,10 @@ def problem_discussion_phase_node(state: InterviewAgentState) -> dict:
     }
 
 def discussion_router(state: InterviewAgentState):
+
+    if state.get("exit_clicked"):
+        return "END"
+
     # Shortcut: if the session was ended by timeout, route accordingly
     session_ended_by = state.get("session_ended_by") or ""
     if session_ended_by == "TIMEOUT_END":
@@ -160,6 +164,10 @@ def coding_phase_node(state: InterviewAgentState) -> dict:
 
 
 def coding_router(state: InterviewAgentState):
+
+    if state.get("exit_clicked"):
+        return "END"
+
     # Shortcut: if the session was ended by timeout, route accordingly
     session_ended_by = state.get("session_ended_by") or ""
     if session_ended_by == "TIMEOUT_END":
@@ -221,6 +229,11 @@ def review_phase_node(state: InterviewAgentState) -> dict:
     }
 
 def review_router(state: InterviewAgentState):
+    #end interview if user clicks button
+    if state.get("exit_clicked"):
+        return "END"
+
+
     # Shortcut: if the session was ended by timeout, skip directly to feedback
     session_ended_by = state.get("session_ended_by") or ""
     if session_ended_by == "TIMEOUT_END":
@@ -316,6 +329,7 @@ def create_interview_graph(checkpointer_obj):
             "CODING": "coding_phase_node",
             "PROBLEM_DISCUSSION": "problem_discussion_phase_node",
             "FEEDBACK": "feedback_phase_node",
+            "END": END,
         },
     )
 
@@ -326,6 +340,7 @@ def create_interview_graph(checkpointer_obj):
             "REVIEW": "review_phase_node",
             "CODING": "coding_phase_node",
             "FEEDBACK": "feedback_phase_node",
+            "END": END,
         },
     )
 
@@ -334,7 +349,8 @@ def create_interview_graph(checkpointer_obj):
         path=review_router,
         path_map={
             "REVIEW": "review_phase_node",
-            "FEEDBACK": "feedback_phase_node"
+            "FEEDBACK": "feedback_phase_node",
+            "END": END,
         },
     )
 

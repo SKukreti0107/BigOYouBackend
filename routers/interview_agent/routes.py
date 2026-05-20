@@ -135,3 +135,27 @@ def feedback(
     persist_turn_data(payload, user_id, res)
     clear_agent_checkpoints(payload.session_id)
     return res
+
+
+#router to end intereview 
+@router.post("/interview/end")
+def end_interview(
+    payload: PhaseRequest,
+    request: Request,
+    user_id: str = Depends(get_current_user),
+):
+    graph = _get_graph_or_503(request)
+    sync_runtime_state_before_turn(payload, graph)
+    res = run_interview_turn(graph=graph, thread_id=payload.session_id, user_input=payload.message)
+    persist_turn_data(payload, user_id, res)
+    clear_agent_checkpoints(payload.session_id)
+
+    with Session(engine) as db:
+        from helpers.session.end_interview_session import set_session_terminated
+        termination_complete = set_session_terminated(db, payload.session_id)
+        if not termination_complete:
+            print(f"Warning: could not set session {payload.session_id} as terminated in DB")
+
+        db.commit()
+
+    return res

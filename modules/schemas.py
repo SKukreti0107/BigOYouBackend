@@ -23,6 +23,7 @@ class PhaseRequest(BaseModel):
     extra_time_used: bool | None = None
     extension_count: int | None = None
     session_ended_by: str | None = None
+    exit_clicked: bool | None = None
 
 
 class AgentInitRequest(BaseModel):
