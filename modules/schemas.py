@@ -7,6 +7,22 @@ class LoginOrSignUpRequest(BaseModel):
     password: str
 
 
+class SignUpRequest(BaseModel):
+    email: str
+    password: str
+    username: str | None = None
+
+
+class ProfileUpdateRequest(BaseModel):
+    email: str
+    username: str | None = None
+
+
+class PasswordUpdateRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class ExecuteRequest(BaseModel):
     language: str
     code: str

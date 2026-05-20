@@ -17,6 +17,7 @@ class Users(SQLModel,table=True):
     user_id: uuid.UUID | None = Field(default=None,primary_key=True)
     email: str 
     pass_hash:str
+    username: Optional[str] = Field(default=None, nullable=True)
 
 class DifficultyLevel(str,Enum):
     EASY = "Easy"
@@ -121,4 +122,6 @@ engine = create_engine(
 
 def create_db_and_table():
     SQLModel.metadata.create_all(engine)
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(255) DEFAULT NULL;"))
 
