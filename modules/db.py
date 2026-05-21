@@ -117,11 +117,12 @@ engine = create_engine(
     conn_string,
     echo=False,
     pool_pre_ping=True,
-    pool_recycle=3600
+    pool_recycle=300,
+    pool_size=10,
+    max_overflow=20
     )
 
 def create_db_and_table():
     SQLModel.metadata.create_all(engine)
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(255) DEFAULT NULL;"))
+
 
