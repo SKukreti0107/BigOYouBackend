@@ -14,7 +14,7 @@ from .helpers.internal_phase_assessment import _merge_criterion,_is_complete
 
 load_dotenv()
 
-_pg_conn = None
+_pg_pool = None
 checkpointer = None
 graph = None
 
@@ -365,7 +365,7 @@ def create_interview_graph(checkpointer_obj):
 
 
 def init_agent_graph() -> bool:
-    global _pg_conn, checkpointer, graph
+    global _pg_pool, checkpointer, graph
 
     if graph is not None:
         return True
@@ -377,10 +377,19 @@ def init_agent_graph() -> bool:
 
     try:
         from langgraph.checkpoint.postgres import PostgresSaver
-        import psycopg
+        from psycopg_pool import ConnectionPool
+        from psycopg.rows import dict_row
 
-        _pg_conn = psycopg.connect(db_url, autocommit=True)
-        checkpointer = PostgresSaver(conn=_pg_conn)
+        _pg_pool = ConnectionPool(
+            conninfo=db_url,
+            kwargs={"autocommit": True, "row_factory": dict_row},
+            min_size=1,
+            max_size=10,
+            max_lifetime=300.0,
+            max_idle=30.0,
+            check=ConnectionPool.check_connection,
+        )
+        checkpointer = PostgresSaver(conn=_pg_pool)
         checkpointer.setup()
         graph = create_interview_graph(checkpointer)
         return True
@@ -388,12 +397,12 @@ def init_agent_graph() -> bool:
         print(f"AI agent init failed: {exc}")
         graph = None
         checkpointer = None
-        if _pg_conn is not None:
+        if _pg_pool is not None:
             try:
-                _pg_conn.close()
+                _pg_pool.close()
             except Exception:
                 pass
-            _pg_conn = None
+            _pg_pool = None
         return False
 
 
@@ -412,13 +421,13 @@ def clear_agent_checkpoints(session_id: str) -> bool:
 
 
 def close_agent_graph() -> None:
-    global _pg_conn, checkpointer, graph
+    global _pg_pool, checkpointer, graph
 
     graph = None
     checkpointer = None
-    if _pg_conn is not None:
+    if _pg_pool is not None:
         try:
-            _pg_conn.close()
+            _pg_pool.close()
         except Exception:
             pass
-    _pg_conn = None
+    _pg_pool = None
