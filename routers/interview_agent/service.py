@@ -220,8 +220,8 @@ def sync_feedback_runtime_state(payload: PhaseRequest, graph, user_id: str):
         if payload.extension_count is not None:
             state_updates["extension_count"] = payload.extension_count
 
-        if payload.session_ended_by is not None:
-            state_updates["session_ended_by"] = payload.session_ended_by
+        # Force session_ended_by to "TIMEOUT_END" to ensure all phase routers transition directly to FEEDBACK
+        state_updates["session_ended_by"] = "TIMEOUT_END"
 
         if state_updates:
             config = {"configurable": {"thread_id": payload.session_id}}

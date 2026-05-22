@@ -149,13 +149,41 @@ def fetch_session_timer(db: Session, session_uuid: uuid.UUID) -> dict | None:
 		return None
 
 	session_row, problem_row = result
-	remaining_time = session_row.started_at + timedelta(minutes=problem_row.expected_time) - datetime.utcnow()
+
+	# Load extension count from LangGraph state checkpointer if available
+	extension_count = 0
+	session_ended_by = ""
+	try:
+		from services.ai_agent.langgraph_agent import is_agent_available, get_graph
+		if is_agent_available():
+			graph = get_graph()
+			config = {"configurable": {"thread_id": str(session_uuid)}}
+			snapshot = graph.get_state(config)
+			if snapshot and hasattr(snapshot, "values"):
+				extension_count = int(snapshot.values.get("extension_count") or 0)
+				session_ended_by = snapshot.values.get("session_ended_by") or ""
+	except Exception as exc:
+		print(f"Error loading extension_count from LangGraph state: {exc}")
+
+	from datetime import timezone
+	started_at = session_row.started_at
+	if started_at.tzinfo is None:
+		started_at = started_at.replace(tzinfo=timezone.utc)
+
+	now = datetime.now(timezone.utc)
+	total_expected_minutes = problem_row.expected_time + extension_count * 15
+
+	if session_ended_by == "TIMEOUT_END":
+		remaining_seconds = 0.0
+	else:
+		remaining_time = started_at + timedelta(minutes=total_expected_minutes) - now
+		remaining_seconds = remaining_time.total_seconds()
 
 	return {
-		"remaining_time": remaining_time.total_seconds(),
+		"remaining_time": remaining_seconds,
 		"phase": session_row.phase,
 		"status": session_row.status,
-		"expected_time": problem_row.expected_time
+		"expected_time": total_expected_minutes
 	}
 
 

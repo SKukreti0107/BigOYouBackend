@@ -11,12 +11,13 @@ def get_last_ai_message(state):
     return ""
 
 
-def run_interview_turn(graph,thread_id, user_input, state=None, is_first=False):
+def run_interview_turn(graph, thread_id, user_input, state=None, is_first=False):
 
     config = {
         "configurable": {
             "thread_id": thread_id
-        }
+        },
+        "recursion_limit": 1000
     }
 
     if is_first:
@@ -27,6 +28,11 @@ def run_interview_turn(graph,thread_id, user_input, state=None, is_first=False):
         # 2. Invoke with `None` to tell LangGraph to resume from suspended edge
         result = graph.invoke(None, config=config)
 
+    # If the graph transitioned to FEEDBACK phase but didn't generate feedback yet
+    # (because it was interrupted after review_phase_node), invoke it once more to run feedback_phase_node
+    if result.get("phase") == "FEEDBACK" and not result.get("feedback"):
+        print("Graph transitioned to FEEDBACK but feedback is missing. Resuming to execute feedback_phase_node...")
+        result = graph.invoke(None, config=config)
     
     # new return format  
     return {
@@ -34,3 +40,4 @@ def run_interview_turn(graph,thread_id, user_input, state=None, is_first=False):
         "feedback": result.get("feedback") if result.get("phase") == "FEEDBACK" else None,
         "phase": result.get("phase")
     }
+

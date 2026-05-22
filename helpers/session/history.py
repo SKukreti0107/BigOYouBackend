@@ -29,12 +29,12 @@ def fetch_sessions_history(
             Interview_Session.topic.label("Topic"),
             Problems.difficulty.label("Difficulty"),
             Session_Feedback.final_score.label("Score"),
-            Session_Feedback.created_at.label("Date"),
+            func.coalesce(Session_Feedback.created_at, Interview_Session.started_at).label("Date"),
         )
         .join(Problems, Interview_Session.problem_id == Problems.problem_id)
-        .join(Session_Feedback, Interview_Session.session_id == Session_Feedback.session_id)
+        .outerjoin(Session_Feedback, Interview_Session.session_id == Session_Feedback.session_id)
         .where(Interview_Session.user_id == user_id)
-        .order_by(Session_Feedback.created_at.desc())
+        .order_by(func.coalesce(Session_Feedback.created_at, Interview_Session.started_at).desc())
         .offset(offset)
         .limit(page_size)
     )

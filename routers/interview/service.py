@@ -11,25 +11,7 @@ from modules.db import engine, Problems, Problem_topics, User_Problem_Status, In
 def get_session_timer_with_extensions(session_id: str, user_id: str, base_timer: dict | None) -> int | None:
     if not base_timer:
         return None
-
-    try:
-        from services.ai_agent.langgraph_agent import get_graph
-
-        graph = get_graph()
-        config = {"configurable": {"thread_id": session_id}}
-        snapshot = graph.get_state(config)
-        values = snapshot.values if snapshot and hasattr(snapshot, "values") else {}
-
-        if (values.get("session_ended_by") or "") == "TIMEOUT_END":
-            return 0
-
-        extension_count = int(values.get("extension_count") or 0)
-        if extension_count > 0:
-            base_timer["remaining_time"] = base_timer["remaining_time"] + extension_count * 15 * 60
-    except Exception:
-        pass
-
-    return base_timer["remaining_time"]
+    return int(base_timer.get("remaining_time", 0))
 
 
 def start_interview_for_topic(

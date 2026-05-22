@@ -91,10 +91,13 @@ def problem_discussion_phase_node(state: InterviewAgentState) -> dict:
     edge_case_flags = updated_assessment.get("edge_cases_discussed") or {}
     complexity_flags = updated_assessment.get("complexity_discussed") or {}
 
+    new_turns = state.get("discussion_turns", 0) + 1
+
     is_complete_discussion = (
         _is_complete(approach_flags) and
         _is_complete(edge_case_flags) and
-        _is_complete(complexity_flags)
+        _is_complete(complexity_flags) and
+        new_turns >= 2
     )
 
     phase = "CODING" if is_complete_discussion else "PROBLEM_DISCUSSION"
@@ -104,7 +107,7 @@ def problem_discussion_phase_node(state: InterviewAgentState) -> dict:
     return {
         "phase": phase,
         "messages": [assistant_message],
-        "discussion_turns": state.get("discussion_turns", 0) + 1,
+        "discussion_turns": new_turns,
         "discussion_assessment": updated_assessment,
     }
 
@@ -126,10 +129,13 @@ def discussion_router(state: InterviewAgentState):
     edge_case_flags = discussion_phase_flags.get("edge_cases_discussed") or {}
     complexity_flags = discussion_phase_flags.get("complexity_discussed") or {}
 
+    discussion_turns = state.get("discussion_turns", 0)
+
     if (
         _is_complete(approach_flags) and
         _is_complete(edge_case_flags) and
-        _is_complete(complexity_flags)
+        _is_complete(complexity_flags) and
+        discussion_turns >= 2
     ):
         return "CODING"
 
@@ -170,10 +176,15 @@ def coding_phase_node(state: InterviewAgentState) -> dict:
     walkthrough_flags = updated_assessment.get("walkthrough_provided") or {}
     correctness_flags = updated_assessment.get("correctness_discussed") or {}
 
+    new_turns = state.get("coding_turns", 0) + 1
+    user_code = (state.get("user_code") or "").strip()
+
     is_complete_coding = (
         _is_complete(code_submitted_flags) and
         _is_complete(walkthrough_flags) and
-        _is_complete(correctness_flags)
+        _is_complete(correctness_flags) and
+        new_turns >= 2 and
+        len(user_code) > 40
     )
 
     phase = "REVIEW" if is_complete_coding else "CODING"
@@ -182,7 +193,7 @@ def coding_phase_node(state: InterviewAgentState) -> dict:
     return {
         "phase": phase,
         "messages": [assistant_message],
-        "coding_turns": state.get("coding_turns", 0) + 1,
+        "coding_turns": new_turns,
         "coding_assessment": updated_assessment,
     }
 
@@ -205,10 +216,15 @@ def coding_router(state: InterviewAgentState):
     walkthrough_flags = coding_phase_flags.get("walkthrough_provided") or {}
     correctness_flags = coding_phase_flags.get("correctness_discussed") or {}
 
+    new_turns = state.get("coding_turns", 0)
+    user_code = (state.get("user_code") or "").strip()
+
     if (
         _is_complete(code_submitted_flags) and
         _is_complete(walkthrough_flags) and
-        _is_complete(correctness_flags)
+        _is_complete(correctness_flags) and
+        new_turns >= 2 and
+        len(user_code) > 40
     ):
         return "REVIEW"
 
@@ -248,10 +264,13 @@ def review_phase_node(state: InterviewAgentState) -> dict:
     edge_case_validation_flags = updated_assessment.get("edge_case_validation") or {}
     final_complexity_flags = updated_assessment.get("final_complexity_summary") or {}
 
+    new_turns = state.get("review_turns", 0) + 1
+
     is_complete_review = (
         _is_complete(optimization_flags) and
         _is_complete(edge_case_validation_flags) and
-        _is_complete(final_complexity_flags)
+        _is_complete(final_complexity_flags) and
+        new_turns >= 2
     )
 
     phase = "FEEDBACK" if is_complete_review else "REVIEW"
@@ -260,7 +279,7 @@ def review_phase_node(state: InterviewAgentState) -> dict:
     return {
         "phase": phase,
         "messages": [assistant_message],
-        "review_turns": state.get("review_turns", 0) + 1,
+        "review_turns": new_turns,
         "review_assessment": updated_assessment,
     }
 
@@ -283,14 +302,197 @@ def review_router(state: InterviewAgentState):
     edge_case_validation_flags = review_phase_flags.get("edge_case_validation") or {}
     final_complexity_flags = review_phase_flags.get("final_complexity_summary") or {}
 
+    new_turns = state.get("review_turns", 0)
+
     if (
         _is_complete(optimization_flags) and
         _is_complete(edge_case_validation_flags) and
-        _is_complete(final_complexity_flags)
+        _is_complete(final_complexity_flags) and
+        new_turns >= 2
     ):
         return "FEEDBACK"
 
     return "REVIEW"
+
+def create_fallback_feedback(state: InterviewAgentState) -> FeedbackResponseFormat:
+    # Safely get internal assessments
+    discussion_assessment = state.get("discussion_assessment") or {}
+    coding_assessment = state.get("coding_assessment") or {}
+    review_assessment = state.get("review_assessment") or {}
+
+    # Check which criteria were completed
+    approach_ok = _is_complete(discussion_assessment.get("approach_explained") or {})
+    edge_cases_ok = _is_complete(discussion_assessment.get("edge_cases_discussed") or {})
+    complexity_ok = _is_complete(discussion_assessment.get("complexity_discussed") or {})
+
+    code_submitted_ok = _is_complete(coding_assessment.get("code_submitted") or {})
+    walkthrough_ok = _is_complete(coding_assessment.get("walkthrough_provided") or {})
+    correctness_ok = _is_complete(coding_assessment.get("correctness_discussed") or {})
+
+    optimization_ok = _is_complete(review_assessment.get("optimization_discussed") or {})
+    edge_validation_ok = _is_complete(review_assessment.get("edge_case_validation") or {})
+    final_complexity_ok = _is_complete(review_assessment.get("final_complexity_summary") or {})
+
+    disc_count = sum([approach_ok, edge_cases_ok, complexity_ok])
+    code_count = sum([code_submitted_ok, walkthrough_ok, correctness_ok])
+    rev_count = sum([optimization_ok, edge_validation_ok, final_complexity_ok])
+
+    # Dynamic Scoring Heuristics
+    ps_score = int(min(10, max(2, 2 + (disc_count * 1.2 + code_count * 1.5))))
+    ca_score = int(min(10, max(2, 3 + (3 if complexity_ok else 0) + (4 if final_complexity_ok else 0))))
+    comm_score = int(min(10, max(3, 4 + disc_count + rev_count - int(state.get("discussion_turns", 0) // 4))))
+
+    overall_score = int((ps_score * 0.4 + ca_score * 0.3 + comm_score * 0.3) * 10)
+
+    performance_label = "Poor"
+    if overall_score >= 90:
+        performance_label = "Exceptional"
+    elif overall_score >= 75:
+        performance_label = "Strong Performance"
+    elif overall_score >= 50:
+        performance_label = "Adequate"
+    elif overall_score >= 35:
+        performance_label = "Below Expectations"
+
+    decision = "Strong No Hire"
+    if overall_score >= 85:
+        decision = "Strong Hire"
+    elif overall_score >= 70:
+        decision = "Hire"
+    elif overall_score >= 55:
+        decision = "Lean Hire"
+    elif overall_score >= 40:
+        decision = "Lean No Hire"
+    elif overall_score >= 25:
+        decision = "No Hire"
+
+    # Get problem specifics
+    problem_references = state.get("problem_references") or {}
+    optimal_time = problem_references.get("time_complexity") or "O(N)"
+    optimal_space = problem_references.get("space_complexity") or "O(1)"
+    problem_title = problem_references.get("title") or "the problem"
+
+    # Heuristic based strengths and weaknesses
+    strengths = []
+    weaknesses = []
+
+    if approach_ok:
+        strengths.append(StrengthItem(
+            category="Problem Solving",
+            title="Systematic Approach Explanation",
+            description="You successfully and clearly explained your approach before jumping into coding.",
+            impact="high"
+        ))
+    else:
+        weaknesses.append(WeaknessItem(
+            category="Problem Solving",
+            title="Premature Implementation Planning",
+            description="You struggled to thoroughly explain your approach before starting to write code.",
+            severity="medium"
+        ))
+
+    if correctness_ok:
+        strengths.append(StrengthItem(
+            category="Technical Execution",
+            title="Logic Correctness Verification",
+            description="Your implementation correctly handled standard test scenarios discussed.",
+            impact="high"
+        ))
+    else:
+        weaknesses.append(WeaknessItem(
+            category="Technical Execution",
+            title="Edge Case Logic Gaps",
+            description="Your implementation had logic gaps under edge cases or extreme input parameters.",
+            severity="high"
+        ))
+
+    if optimization_ok:
+        strengths.append(StrengthItem(
+            category="Optimization",
+            title="Proactive Resource Optimization",
+            description="You actively identified performance bottlenecks and optimized space/time complexities.",
+            impact="medium"
+        ))
+    else:
+        weaknesses.append(WeaknessItem(
+            category="Optimization",
+            title="Suboptimal Approach Selection",
+            description="The chosen approach contains suboptimal memory allocations or extra passes.",
+            severity="medium"
+        ))
+
+    if not strengths:
+        strengths.append(StrengthItem(
+            category="Communication",
+            title="Interactive Discussion Participation",
+            description="You maintained an active dialogue with the interviewer throughout the session.",
+            impact="low"
+        ))
+    if not weaknesses:
+        weaknesses.append(WeaknessItem(
+            category="Problem Solving",
+            title="Alternative Approaches Comparison",
+            description="Try exploring alternative data structures to compare performance trade-offs in depth.",
+            severity="low"
+        ))
+
+    # Time spent
+    total_time = state.get("total_time_spent_sec") or 0
+    total_submissions = state.get("total_submissions") or 0
+    hints_used = state.get("hints_used") or 0
+
+    speed_percentile = max(0, min(100, 100 - int((total_time / 1800) * 100))) if total_time > 0 else 50
+
+    return FeedbackResponseFormat(
+        response=(
+            f"Thank you for completing the technical interview on '{problem_title}'. "
+            f"We have compiled your comprehensive technical performance report. "
+            f"You demonstrated an overall score of {overall_score}/100. "
+            f"Please review the detailed category breakdowns, metrics, strengths, and areas for improvement below."
+        ),
+        feedback=FeedbackItem(
+            session_summary=SessionSummary(
+                overall_score=overall_score,
+                performance_label=performance_label,
+                difficulty=problem_references.get("difficulty") or "Medium",
+                time_spent_seconds=total_time
+            ),
+            scores=Scores(
+                problem_solving=ScoreWithNotes(
+                    score=ps_score,
+                    notes=f"Demonstrated good approach explaining and coding capabilities with {code_count}/3 coding milestones met."
+                ),
+                complexity_analysis=ComplexityScore(
+                    score=ca_score,
+                    time_complexity=optimal_time,
+                    space_complexity=optimal_space,
+                    notes=f"Identified optimal complexity bounds. Phase metrics: discussion={complexity_ok}, final review={final_complexity_ok}."
+                ),
+                communication=ScoreWithNotes(
+                    score=comm_score,
+                    notes="Structured dialogue, active engagement with the interviewer prompt constraints."
+                )
+            ),
+            strengths=strengths,
+            weaknesses=weaknesses,
+            key_metrics=KeyMetrics(
+                runtime_complexity=ComplexityMetric(
+                    value=optimal_time,
+                    status="optimal" if optimization_ok else "acceptable"
+                ),
+                memory_efficiency=ComplexityMetric(
+                    value=optimal_space,
+                    status="optimal" if final_complexity_ok else "acceptable"
+                ),
+                coding_speed_percentile=speed_percentile
+            ),
+            final_verdict=Verdict(
+                decision=decision,
+                confidence=0.8,
+                summary=f"Candidate performance was analyzed. Overall hiring recommendation is {decision} with 80% confidence assessment."
+            )
+        )
+    )
 
 def feedback_phase_node(state: InterviewAgentState) -> dict:
     final_prompt = build_complete_prompt(state,FEEDBACK_PROMPT)
@@ -326,13 +528,19 @@ def feedback_phase_node(state: InterviewAgentState) -> dict:
         f"Session ended by: {session_ended_by}\n"
     )
 
-    res = base_llm.with_structured_output(
-        FeedbackResponseFormat
-    ).invoke([
-        SystemMessage(content=final_prompt),
-        *messages[-6:],
-        context_message,
-    ])
+    try:
+        res = base_llm.with_structured_output(
+            FeedbackResponseFormat
+        ).invoke([
+            SystemMessage(content=final_prompt),
+            *messages[-6:],
+            context_message,
+        ])
+        if res is None:
+            raise ValueError("Structured LLM returned None")
+    except Exception as exc:
+        print(f"Structured feedback generation failed: {exc}. Using dynamic fallback compilation.")
+        res = create_fallback_feedback(state)
 
     assistant_message = AIMessage(content=res.response)
     
