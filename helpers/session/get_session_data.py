@@ -239,8 +239,24 @@ def get_session_data(session_id: str, user_id: str = Depends(get_current_user)):
 
 def fetch_last_session_id(user_id: uuid.UUID = Depends(get_current_user)):
 	with Session(engine) as db:
-		query = select(Interview_Session.session_id).where(Interview_Session.user_id == user_id).order_by(Interview_Session.user_id.desc()).limit(1)
+		# First try to get the latest session with feedback
+		query = (
+			select(Interview_Session.session_id)
+			.join(Session_Feedback, Session_Feedback.session_id == Interview_Session.session_id)
+			.where(Interview_Session.user_id == user_id)
+			.order_by(Interview_Session.started_at.desc())
+			.limit(1)
+		)
 		result = db.execute(query).scalar_one_or_none()
 		if result:
 			return result
-		return None
+		
+		# Fallback to the latest session regardless of feedback
+		query_fallback = (
+			select(Interview_Session.session_id)
+			.where(Interview_Session.user_id == user_id)
+			.order_by(Interview_Session.started_at.desc())
+			.limit(1)
+		)
+		result = db.execute(query_fallback).scalar_one_or_none()
+		return result

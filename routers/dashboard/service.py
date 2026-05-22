@@ -191,23 +191,33 @@ def fetch_weak_areas(db: Session, user_uuid: uuid.UUID) -> list:
 def fetch_last_interview_feedback(db: Session, user_uuid: uuid.UUID) -> dict:
     try:
         stmt = (
-            select(Session_Feedback.feedback_json)
+            select(Session_Feedback.feedback_json, Session_Feedback.final_score)
             .join(Interview_Session, Interview_Session.session_id == Session_Feedback.session_id)
             .where(Interview_Session.user_id == user_uuid)
-            .order_by(Session_Feedback.created_at.desc())
+            .order_by(Interview_Session.started_at.desc())
             .limit(1)
         )
-        feedback = db.exec(stmt).first()
+        result = db.exec(stmt).first()
 
-        if not feedback:
+        if not result:
             return {}
 
-        feedback_json = feedback[0] if isinstance(feedback, tuple) else feedback
+        feedback_json, final_score = result
+
+        # Robust extraction in case the dictionary has an outer "feedback" key
+        fb_data = feedback_json.get("feedback", {}) if "feedback" in feedback_json else feedback_json
+
+        # Retrieve score from final_score column, then try nested overall_score
+        score = final_score
+        if score is None:
+            score = fb_data.get("session_summary", {}).get("overall_score")
+        if score is None:
+            score = fb_data.get("overall_score", 0)
 
         return {
-            "strengths": feedback_json.get("strengths", []),
-            "weaknesses": feedback_json.get("weaknesses", []),
-            "score": feedback_json.get("overall_score", 0)
+            "strengths": fb_data.get("strengths", []),
+            "weaknesses": fb_data.get("weaknesses", []),
+            "score": score
         }
     except Exception as e:
         print(f"Error fetching last feedback: {e}")
