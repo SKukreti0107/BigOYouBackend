@@ -1,11 +1,11 @@
-from .langgraph_agent.core import (
+from .core import (
     clear_agent_checkpoints,
     close_agent_graph,
+    create_interview_graph,
     get_graph,
     init_agent_graph,
     is_agent_available,
 )
-from .langgraph_agent.graph_builder import create_interview_graph
 
 __all__ = [
     "clear_agent_checkpoints",
