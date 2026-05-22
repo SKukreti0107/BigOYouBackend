@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, File, UploadFile
 from sqlmodel import Session
+import httpx
+import os
 
 from helpers.auth.auth_deps import get_current_user
 from modules.db import engine
@@ -159,3 +161,67 @@ def end_interview(
         db.commit()
 
     return res
+
+
+@router.post("/interview/transcribe")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Transcribes audio recorded by the frontend using Groq's Whisper API.
+    """
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Groq API key not configured on backend"
+        )
+
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty audio file received"
+        )
+
+    url = "https://api.groq.com/openai/v1/audio/transcriptions"
+    headers = {
+        "Authorization": f"Bearer {groq_api_key}"
+    }
+
+    # Whisper expects a filename parameter to detect format (e.g. input.webm)
+    filename = file.filename if file.filename else "input.webm"
+    files = {
+        "file": (filename, content, file.content_type or "audio/webm")
+    }
+    data = {
+        "model": "whisper-large-v3",
+        "response_format": "json"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                headers=headers,
+                files=files,
+                data=data,
+                timeout=30.0
+            )
+
+        if response.status_code != 200:
+            print(f"Groq API error response: {response.text}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail="Groq Whisper transcription API failed"
+            )
+
+        return response.json()
+
+    except httpx.RequestError as exc:
+        print(f"HTTP request to Groq failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to connect to Groq Whisper transcription API"
+        )
