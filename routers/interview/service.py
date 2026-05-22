@@ -32,33 +32,45 @@ def get_session_timer_with_extensions(session_id: str, user_id: str, base_timer:
     return base_timer["remaining_time"]
 
 
-def start_interview_for_topic(topic: str, user_id: str) -> dict:
+def start_interview_for_topic(
+    topic: str, user_id: str, problem_id: str | None = None
+) -> dict:
     try:
         user_uuid = uuid.UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid user_id")
 
     with Session(engine) as session:
-        statement = (
-            select(Problems)
-            .join(Problem_topics, Problem_topics.problem_id == Problems.problem_id)
-            .outerjoin(
-                User_Problem_Status,
-                (User_Problem_Status.problem_id == Problems.problem_id)
-                & (User_Problem_Status.user_id == user_uuid),
+        if problem_id:
+            try:
+                prob_uuid = uuid.UUID(problem_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid problem_id")
+            statement = select(Problems).where(Problems.problem_id == prob_uuid)
+            problem = session.exec(statement).first()
+            if not problem:
+                raise HTTPException(status_code=404, detail="Problem not found")
+        else:
+            statement = (
+                select(Problems)
+                .join(Problem_topics, Problem_topics.problem_id == Problems.problem_id)
+                .outerjoin(
+                    User_Problem_Status,
+                    (User_Problem_Status.problem_id == Problems.problem_id)
+                    & (User_Problem_Status.user_id == user_uuid),
+                )
+                .where(Problem_topics.topic == topic)
+                .where(
+                    (User_Problem_Status.is_completed == False)
+                    | (User_Problem_Status.is_completed.is_(None))
+                )
+                .order_by(func.random())
+                .limit(1)
             )
-            .where(Problem_topics.topic == topic)
-            .where(
-                (User_Problem_Status.is_completed == False)
-                | (User_Problem_Status.is_completed.is_(None))
-            )
-            .order_by(func.random())
-            .limit(1)
-        )
 
-        problem = session.exec(statement).first()
-        if not problem:
-            raise HTTPException(status_code=404, detail="No unsolved problems found")
+            problem = session.exec(statement).first()
+            if not problem:
+                raise HTTPException(status_code=404, detail="No unsolved problems found")
 
         session_row = Interview_Session(
             user_id=user_uuid,

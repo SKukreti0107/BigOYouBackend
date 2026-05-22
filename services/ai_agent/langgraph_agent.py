@@ -87,10 +87,22 @@ def problem_discussion_phase_node(state: InterviewAgentState) -> dict:
         ),
     }
 
+    approach_flags = updated_assessment.get("approach_explained") or {}
+    edge_case_flags = updated_assessment.get("edge_cases_discussed") or {}
+    complexity_flags = updated_assessment.get("complexity_discussed") or {}
+
+    is_complete_discussion = (
+        _is_complete(approach_flags) and
+        _is_complete(edge_case_flags) and
+        _is_complete(complexity_flags)
+    )
+
+    phase = "CODING" if is_complete_discussion else "PROBLEM_DISCUSSION"
+
     assistant_message = AIMessage(content=res.next_question)
 
     return {
-        "phase": "PROBLEM_DISCUSSION",
+        "phase": phase,
         "messages": [assistant_message],
         "discussion_turns": state.get("discussion_turns", 0) + 1,
         "discussion_assessment": updated_assessment,
@@ -153,10 +165,22 @@ def coding_phase_node(state: InterviewAgentState) -> dict:
             res.correctness_discussed,
         ),
     }
+
+    code_submitted_flags = updated_assessment.get("code_submitted") or {}
+    walkthrough_flags = updated_assessment.get("walkthrough_provided") or {}
+    correctness_flags = updated_assessment.get("correctness_discussed") or {}
+
+    is_complete_coding = (
+        _is_complete(code_submitted_flags) and
+        _is_complete(walkthrough_flags) and
+        _is_complete(correctness_flags)
+    )
+
+    phase = "REVIEW" if is_complete_coding else "CODING"
     assistant_message = AIMessage(content=res.next_question)
 
     return {
-        "phase": "CODING",
+        "phase": phase,
         "messages": [assistant_message],
         "coding_turns": state.get("coding_turns", 0) + 1,
         "coding_assessment": updated_assessment,
@@ -219,10 +243,22 @@ def review_phase_node(state: InterviewAgentState) -> dict:
             res.final_complexity_summary,
         ),
     }
+
+    optimization_flags = updated_assessment.get("optimization_discussed") or {}
+    edge_case_validation_flags = updated_assessment.get("edge_case_validation") or {}
+    final_complexity_flags = updated_assessment.get("final_complexity_summary") or {}
+
+    is_complete_review = (
+        _is_complete(optimization_flags) and
+        _is_complete(edge_case_validation_flags) and
+        _is_complete(final_complexity_flags)
+    )
+
+    phase = "FEEDBACK" if is_complete_review else "REVIEW"
     assistant_message = AIMessage(content=res.next_question)
 
     return {
-        "phase": "REVIEW",
+        "phase": phase,
         "messages": [assistant_message],
         "review_turns": state.get("review_turns", 0) + 1,
         "review_assessment": updated_assessment,
@@ -299,11 +335,14 @@ def feedback_phase_node(state: InterviewAgentState) -> dict:
     ])
 
     assistant_message = AIMessage(content=res.response)
+    
+    fb_dict = res.feedback.model_dump()
+    fb_dict["session_summary"]["time_spent_seconds"] = total_time
 
     return {
         "messages": [assistant_message],
         "phase": "FEEDBACK",
-        "feedback": res.feedback.model_dump(),
+        "feedback": fb_dict,
     }
 
 #-------------------------------------------------------

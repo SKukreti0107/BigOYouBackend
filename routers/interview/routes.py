@@ -54,5 +54,9 @@ def session_feedback(session_id: str, user_id: str = Depends(get_current_user)):
 
 
 @router.post("/interview/start")
-def start_interview(topic: str, user_id: str = Depends(get_current_user)):
-    return start_interview_for_topic(topic, user_id)
+def start_interview(
+    topic: str,
+    problem_id: str | None = None,
+    user_id: str = Depends(get_current_user),
+):
+    return start_interview_for_topic(topic, user_id, problem_id=problem_id)

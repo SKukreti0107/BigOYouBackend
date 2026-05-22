@@ -7,6 +7,8 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    networks:
+      - bigoyu-net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -30,6 +32,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    networks:
+      - bigoyu-net
     restart: unless-stopped
 
   worker:
@@ -48,8 +52,15 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    networks:
+      - bigoyu-net
     restart: unless-stopped
+
+networks:
+  bigoyu-net:
+    driver: bridge
 
 volumes:
   redis-data:
   code-execution:
+
