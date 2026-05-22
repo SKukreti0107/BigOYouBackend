@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from modules.db import engine, Problems, Problem_topics, User_Problem_Status, Interview_Session, Session_Metrics
+from modules.db import engine, Problems, Problem_topics, User_Problem_Status, Interview_Session, Session_Metrics, Session_Feedback
 
 
 def get_session_timer_with_extensions(session_id: str, user_id: str, base_timer: dict | None) -> int | None:
@@ -33,26 +33,40 @@ def start_interview_for_topic(
             if not problem:
                 raise HTTPException(status_code=404, detail="Problem not found")
         else:
+            # 1. Get all problem_ids completed by the user (closed sessions with score > 70)
+            completed_problems_subquery = (
+                select(Interview_Session.problem_id)
+                .join(Session_Feedback, Session_Feedback.session_id == Interview_Session.session_id)
+                .where(Interview_Session.user_id == user_uuid)
+                .where(Interview_Session.status == "CLOSED")
+                .where(Session_Feedback.final_score > 70)
+            )
+
+            # 2. Query unsolved/uncompleted problems in this topic
             statement = (
                 select(Problems)
                 .join(Problem_topics, Problem_topics.problem_id == Problems.problem_id)
-                .outerjoin(
-                    User_Problem_Status,
-                    (User_Problem_Status.problem_id == Problems.problem_id)
-                    & (User_Problem_Status.user_id == user_uuid),
-                )
                 .where(Problem_topics.topic == topic)
-                .where(
-                    (User_Problem_Status.is_completed == False)
-                    | (User_Problem_Status.is_completed.is_(None))
-                )
+                .where(Problems.problem_id.notin_(completed_problems_subquery))
                 .order_by(func.random())
                 .limit(1)
             )
 
             problem = session.exec(statement).first()
+
+            # 3. Fallback: If all problems in this topic are completed, pick any random problem from the topic to allow re-practice
             if not problem:
-                raise HTTPException(status_code=404, detail="No unsolved problems found")
+                fallback_statement = (
+                    select(Problems)
+                    .join(Problem_topics, Problem_topics.problem_id == Problems.problem_id)
+                    .where(Problem_topics.topic == topic)
+                    .order_by(func.random())
+                    .limit(1)
+                )
+                problem = session.exec(fallback_statement).first()
+
+            if not problem:
+                raise HTTPException(status_code=404, detail="No problems found for this topic")
 
         session_row = Interview_Session(
             user_id=user_uuid,
