@@ -195,11 +195,37 @@ def sync_feedback_runtime_state(payload: PhaseRequest, graph, user_id: str):
     with Session(engine) as db:
         session_row = get_session_or_404(db, payload.session_id, user_id)
 
-        populate_total_time_spent_sec(session_row.session_id, user_id)
+        # 1. Direct computation of elapsed time within the active transaction:
+        from helpers.session.get_session_data import fetch_session_timer
+        session_timer = fetch_session_timer(db, session_row.session_id)
+        total_time_taken = 0
+        if session_timer:
+            total_time_taken = int(
+                session_timer["expected_time"] * 60
+                - session_timer["remaining_time"]
+            )
+            if total_time_taken < 0:
+                total_time_taken = 0
 
+        # Update Session_Metrics directly in the current session
         metrics = db.exec(
             select(Session_Metrics).where(Session_Metrics.session_id == session_row.session_id)
         ).first()
+
+        if not metrics:
+            metrics = Session_Metrics(
+                session_id=session_row.session_id,
+                total_time_spent_sec=total_time_taken,
+                total_submissions=0,
+                hints_used=0
+            )
+            db.add(metrics)
+        else:
+            metrics.total_time_spent_sec = total_time_taken
+            db.add(metrics)
+
+        db.commit()
+        db.refresh(metrics)
 
         state_updates = {}
         if metrics:

@@ -291,6 +291,32 @@ def review_router(state):
     return "REVIEW"
 
 
+def _get_elapsed_time(state) -> int:
+    total_time = state.get("total_time_spent_sec") or 0
+    if total_time <= 0:
+        try:
+            import uuid
+            from sqlmodel import Session
+            from modules.db import engine
+            from helpers.session.get_session_data import fetch_session_timer
+            
+            session_id_str = state.get("session_id")
+            if session_id_str:
+                session_uuid = uuid.UUID(session_id_str)
+                with Session(engine) as db:
+                    session_timer = fetch_session_timer(db, session_uuid)
+                    if session_timer:
+                        total_time = int(
+                            session_timer["expected_time"] * 60
+                            - session_timer["remaining_time"]
+                        )
+                        if total_time < 0:
+                            total_time = 0
+        except Exception as exc:
+            print(f"Self-healing time calculation failed: {exc}")
+    return total_time
+
+
 def create_fallback_feedback(state):
     discussion_assessment = state.get("discussion_assessment") or {}
     coding_assessment = state.get("coding_assessment") or {}
@@ -424,7 +450,7 @@ def create_fallback_feedback(state):
             )
         )
 
-    total_time = state.get("total_time_spent_sec") or 0
+    total_time = _get_elapsed_time(state)
     speed_percentile = max(0, min(100, 100 - int((total_time / 1800) * 100))) if total_time > 0 else 50
 
     return FeedbackResponseFormat(
@@ -489,7 +515,7 @@ def feedback_phase_node(state):
     coding_assessment = state.get("coding_assessment") or {}
     review_assessment = state.get("review_assessment") or {}
 
-    total_time = state.get("total_time_spent_sec") or 0
+    total_time = _get_elapsed_time(state)
     total_submissions = state.get("total_submissions") or 0
     hints_used = state.get("hints_used") or 0
     time_expired = bool(state.get("time_expired") or False)
