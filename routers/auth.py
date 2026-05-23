@@ -78,7 +78,10 @@ def login(payload: LoginOrSignUpRequest, response: Response):
                 secure=True,
                 max_age=10800
             )
-            return {"message": "Login successful"}
+            return {
+                "message": "Login successful",
+                "access_token": token
+            }
 
     except HTTPException:
         raise
