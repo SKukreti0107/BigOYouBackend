@@ -64,6 +64,16 @@ class ProblemCreateRequest(BaseModel):
     expected_time: int
     topics: list[str] = []
 
+    # Optional reference solution fields
+    optimal_approach: str | None = None
+    time_complexity: str | None = None
+    space_complexity: str | None = None
+    key_insights: str | None = None
+    common_pitfalls: str | None = None
+    pseudocode: str | None = None
+    leetcode_slug: str | None = None
+    leetcode_url: str | None = None
+
 
 class ProblemUpdateRequest(BaseModel):
     title: str | None = None

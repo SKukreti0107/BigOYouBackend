@@ -2,7 +2,7 @@
 from dotenv import load_dotenv
 import os
 load_dotenv()
-from sqlmodel import SQLModel,create_engine,Field
+from sqlmodel import SQLModel,create_engine,Field,Session
 import uuid
 from enum import Enum
 from datetime import datetime
@@ -37,6 +37,9 @@ class Problems(SQLModel,table=True):
     example:str
     difficulty:DifficultyLevel
     expected_time:int
+    leetcode_slug: Optional[str] = Field(default=None, index=True, nullable=True)
+    leetcode_url: Optional[str] = Field(default=None, nullable=True)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.user_id", nullable=True)
 
 class User_Problem_Status(SQLModel,table=True):
     user_id: uuid.UUID = Field(
@@ -124,5 +127,23 @@ engine = create_engine(
 
 def create_db_and_table():
     SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS leetcode_slug VARCHAR;"))
+        session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS leetcode_url VARCHAR;"))
+        session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS user_id UUID;"))
+        try:
+            session.exec(text("DROP INDEX IF EXISTS ix_problems_leetcode_slug;"))
+        except Exception:
+            pass
+        try:
+            session.exec(text("ALTER TABLE problems DROP CONSTRAINT IF EXISTS problems_leetcode_slug_key;"))
+        except Exception:
+            pass
+        try:
+            session.exec(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_problems_leetcode_slug_user_id ON problems (leetcode_slug, user_id) WHERE user_id IS NOT NULL;"))
+            session.exec(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_problems_leetcode_slug_global ON problems (leetcode_slug) WHERE user_id IS NULL;"))
+        except Exception:
+            pass
+        session.commit()
 
 

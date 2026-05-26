@@ -1,6 +1,10 @@
 import uuid
+import json
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlmodel import Session, select, col
+from helpers.redis.redis_client import redis_conn
+from services.ai_agent.langgraph_agent.llm import base_llm
+from routers.problems import fetch_leetcode_question, clean_html, parse_leetcode_slug, GeneratedProblemDetails, LeetCodeImportRequest
 
 from helpers.auth.auth_deps import get_current_user
 from modules.db import (
@@ -128,10 +132,10 @@ def get_problem(problem_id: str, _admin: str = Depends(require_admin)):
 
 @router.post("/problems", status_code=201)
 def create_problem(payload: ProblemCreateRequest, _admin: str = Depends(require_admin)):
-    """Create a new problem with topics."""
+    """Create a new problem with topics and optional reference solution."""
     with Session(engine) as db:
-        # Check duplicate title
-        existing = db.exec(select(Problems).where(Problems.title == payload.title)).first()
+        # Check duplicate title (global problems only)
+        existing = db.exec(select(Problems).where(Problems.title == payload.title, Problems.user_id == None)).first()
         if existing:
             raise HTTPException(409, f"Problem with title '{payload.title}' already exists")
 
@@ -142,12 +146,29 @@ def create_problem(payload: ProblemCreateRequest, _admin: str = Depends(require_
             example=payload.example,
             difficulty=payload.difficulty,
             expected_time=payload.expected_time,
+            leetcode_slug=payload.leetcode_slug,
+            leetcode_url=payload.leetcode_url,
+            user_id=None # Admin seeded problems are always global
         )
         db.add(problem)
         db.flush()  # Get the problem_id
 
         for topic_name in payload.topics:
             db.add(Problem_topics(problem_id=problem.problem_id, topic=topic_name.strip()))
+
+        # Save reference solution if provided
+        if payload.optimal_approach:
+            ref = Problem_Reference(
+                ref_id=uuid.uuid4(),
+                problem_id=problem.problem_id,
+                optimal_approach=payload.optimal_approach,
+                time_complexity=payload.time_complexity or "O(N)",
+                space_complexity=payload.space_complexity or "O(1)",
+                key_insights=payload.key_insights or "",
+                common_pitfalls=payload.common_pitfalls,
+                pseudocode=payload.pseudocode
+            )
+            db.add(ref)
 
         db.commit()
 
@@ -238,6 +259,80 @@ def delete_problem(problem_id: str, _admin: str = Depends(require_admin)):
         db.commit()
 
         return {"message": "Problem deleted"}
+
+
+@router.post("/problems/preview-import")
+async def preview_leetcode_import(
+    payload: LeetCodeImportRequest,
+    _admin: str = Depends(require_admin)
+):
+    try:
+        title_slug = parse_leetcode_slug(payload.url)
+        if not title_slug:
+            raise HTTPException(status_code=400, detail="Invalid LeetCode URL or slug")
+            
+        # Redis Cache Lookup for LeetCode API response
+        cache_key = f"leetcode_cache:{title_slug}"
+        cached_data = redis_conn.get(cache_key)
+        
+        if cached_data:
+            leetcode_data = json.loads(cached_data)
+        else:
+            leetcode_data = await fetch_leetcode_question(title_slug)
+            redis_conn.setex(cache_key, 86400, json.dumps(leetcode_data))
+            
+        cleaned_statement = clean_html(leetcode_data.get("content", ""))
+        
+        code_templates = ""
+        for s in leetcode_data.get("codeSnippets", []):
+            code_templates += f"Language: {s.get('lang')}\nCode:\n{s.get('code')}\n\n"
+            
+        prompt_text = f"""
+You are a senior FAANG interviewer and algorithm expert.
+We are importing a coding problem from LeetCode. Below is the raw problem metadata:
+
+Title: {leetcode_data["title"]}
+Difficulty: {leetcode_data["difficulty"]}
+Topics: {", ".join([t.get("name", "") for t in leetcode_data.get("topicTags", [])])}
+Statement / Description:
+{cleaned_statement}
+
+Starter Code Templates:
+{code_templates}
+
+Generate the detailed evaluation reference data for this coding problem:
+1. `example`: Extrapolate one or two clear examples showing Input, Output, and an Explanation. Format it clearly.
+2. `expected_time`: Provide a reasonable expected completion time in minutes (Easy: 15-20, Medium: 30-40, Hard: 45-60).
+3. `optimal_approach`: Provide a clear description of the optimal strategy/algorithm.
+4. `time_complexity` & `space_complexity`: Provide Big-O complexities.
+5. `key_insights`: List key insights or observations needed to solve the problem.
+6. `common_pitfalls`: List common bugs, edge cases, and pitfalls.
+7. `pseudocode`: Wrote a complete, production-ready, fully commented Python solution matching the optimal approach.
+"""
+        generated = base_llm.with_structured_output(GeneratedProblemDetails).invoke(prompt_text)
+        
+        topics = [t.get("name") for t in leetcode_data.get("topicTags", []) if t.get("name")]
+        if not topics:
+            topics = ["LeetCode Seed"]
+            
+        return {
+            "title": leetcode_data["title"],
+            "statement": cleaned_statement,
+            "difficulty": leetcode_data["difficulty"],
+            "topics": topics,
+            "example": generated.example,
+            "expected_time": generated.expected_time,
+            "optimal_approach": generated.optimal_approach,
+            "time_complexity": generated.time_complexity,
+            "space_complexity": generated.space_complexity,
+            "key_insights": generated.key_insights,
+            "common_pitfalls": generated.common_pitfalls,
+            "pseudocode": generated.pseudocode,
+            "leetcode_slug": title_slug,
+            "leetcode_url": f"https://leetcode.com/problems/{title_slug}/"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to preview import: {str(e)}")
 
 
 # ═══════════════════════════════════════════════════════
