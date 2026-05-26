@@ -105,6 +105,7 @@ def build_initial_state(
         "discussion_turns": 0,
         "review_turns": 0,
         "coding_turns": 0,
+        "hints_used": 0,
     }
 
 

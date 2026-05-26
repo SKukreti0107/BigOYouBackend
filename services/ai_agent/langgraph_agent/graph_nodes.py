@@ -338,7 +338,12 @@ def create_fallback_feedback(state):
     code_count = sum([code_submitted_ok, walkthrough_ok, correctness_ok])
     rev_count = sum([optimization_ok, edge_validation_ok, final_complexity_ok])
 
-    ps_score = int(min(10, max(2, 2 + (disc_count * 1.2 + code_count * 1.5))))
+    hints_used = int(state.get("hints_used") or 0)
+    ps_base = 2 + (disc_count * 1.2 + code_count * 1.5) - (hints_used * 1.5)
+    ps_score = int(min(10, max(2, ps_base)))
+    if hints_used >= 3:
+        ps_score = min(ps_score, 4)
+
     ca_score = int(min(10, max(2, 3 + (3 if complexity_ok else 0) + (4 if final_complexity_ok else 0))))
     comm_score = int(min(10, max(3, 4 + disc_count + rev_count - int(state.get("discussion_turns", 0) // 4))))
 

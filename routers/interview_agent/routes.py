@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status, File, UploadFile
-from sqlmodel import Session
+from sqlmodel import Session, select
 import httpx
 import os
 
 from helpers.auth.auth_deps import get_current_user
-from modules.db import engine
+from modules.db import engine, Session_Metrics
 from modules.schemas import PhaseRequest, AgentInitRequest, TimeoutActionRequest
 from services.ai_agent.langgraph_agent import get_graph, clear_agent_checkpoints
 from services.ai_agent.helpers.agent_runners import run_interview_turn
@@ -136,6 +136,42 @@ def feedback(
     res = run_interview_turn(graph=graph, thread_id=payload.session_id, user_input=payload.message)
     persist_turn_data(payload, user_id, res)
     clear_agent_checkpoints(payload.session_id)
+    return res
+
+
+@router.post("/interview/hint")
+def hint(
+    payload: PhaseRequest,
+    request: Request,
+    user_id: str = Depends(get_current_user),
+):
+    graph = _get_graph_or_503(request)
+    
+    # 1. Increment hints_used in database
+    from helpers.session.update_sesson_metrics import increment_hints_used
+    increment_hints_used(payload.session_id, user_id)
+    
+    # 2. Get current hints_used count from database to synchronize state
+    with Session(engine) as db:
+        session_row = get_session_or_404(db, payload.session_id, user_id)
+        metrics = db.exec(
+            select(Session_Metrics).where(Session_Metrics.session_id == session_row.session_id)
+        ).first()
+        hints_used_count = metrics.hints_used if metrics else 1
+
+    # 3. Synchronize editor code, language, and other runtime state before turn
+    config = {"configurable": {"thread_id": payload.session_id}}
+    sync_runtime_state_before_turn(payload, graph)
+    graph.update_state(config, {"hints_used": hints_used_count})
+
+    # 4. Invoke agent turn with user message asking for hint
+    res = run_interview_turn(
+        graph=graph,
+        thread_id=payload.session_id,
+        user_input=payload.message
+    )
+    
+    persist_turn_data(payload, user_id, res)
     return res
 
 
