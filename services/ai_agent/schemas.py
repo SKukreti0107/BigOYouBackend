@@ -66,17 +66,23 @@ class InterviewAgentState(TypedDict):
 
 
 class ScoreWithNotes(BaseModel):
-    """A score accompanied by evaluator notes."""
+    """A score accompanied by evaluator notes and detailed rubric justification."""
     score: int = Field(ge=0, le=10, description="Integer score from 0 to 10")
-    notes: str = Field(min_length=1, description="Brief evaluator notes justifying this score")
+    notes: Optional[str] = Field(default=None, description="Brief evaluator notes (for backward compatibility)")
+    rubric_tier: str = Field(min_length=1, description="The rubric tier description they fell into (e.g. '9-10 (Strong/Exceptional)', '7-8 (Clear Pass)', '5-6 (Marginal/Weak)', '1-4 (Fail)')")
+    justification: str = Field(min_length=1, description="Extremely detailed justification explaining why they received this score and explaining why they did not score higher or lower by comparing their performance directly to adjacent tiers.")
+    improvement_steps: List[str] = Field(description="List of 3-4 highly specific, actionable study or coding recommendations to achieve the next higher tier.")
 
 
 class ComplexityScore(BaseModel):
-    """Complexity analysis score with identified complexities."""
+    """Complexity analysis score with identified complexities and detailed rubric justification."""
     score: int = Field(ge=0, le=10, description="Integer score from 0 to 10 evaluating complexity understanding")
     time_complexity: str = Field(min_length=1, description="The time complexity, e.g. O(n), O(n log n)")
     space_complexity: str = Field(min_length=1, description="The space complexity, e.g. O(1), O(n)")
-    notes: str = Field(min_length=1, description="Notes on complexity analysis")
+    notes: Optional[str] = Field(default=None, description="Notes on complexity analysis (for backward compatibility)")
+    rubric_tier: str = Field(min_length=1, description="The rubric tier description they fell into")
+    justification: str = Field(min_length=1, description="Extremely detailed justification explaining why they received this complexity score, comparing their analysis to the optimal bounds and identifying any reasoning gaps.")
+    improvement_steps: List[str] = Field(description="List of 3-4 highly specific, actionable study or coding recommendations to achieve the next higher tier.")
 
 
 class Scores(BaseModel):
@@ -138,6 +144,7 @@ class FeedbackItem(BaseModel):
     weaknesses: List[WeaknessItem]
     key_metrics: KeyMetrics
     final_verdict: Verdict
+    evaluation_trace: List[str] = Field(description="A step-by-step trace log of how the evaluation was generated, checking milestones, checking penalties, and verifying complexities.")
 
 
 class FeedbackResponseFormat(BaseModel):
