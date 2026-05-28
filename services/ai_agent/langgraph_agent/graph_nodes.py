@@ -558,12 +558,95 @@ def feedback_phase_node(state):
     extension_count = int(state.get("extension_count") or 0)
     session_ended_by = state.get("session_ended_by") or "NORMAL"
 
+    test_case_results = state.get("test_case_results") or []
+    if not test_case_results:
+        # Dynamically execute code evaluation during the feedback phase if results are empty/missing
+        user_code = state.get("user_code")
+        language = state.get("user_code_language")
+        problem_refs = state.get("problem_references") or {}
+
+        if not user_code or not language:
+            # Fallback to database
+            session_id = state.get("session_id")
+            if session_id:
+                try:
+                    import uuid
+                    from sqlmodel import Session
+                    from modules.db import engine
+                    from routers.interview_agent.service import get_latest_code_and_language
+                    with Session(engine) as db:
+                        db_code, db_lang = get_latest_code_and_language(db, uuid.UUID(session_id))
+                        user_code = user_code or db_code
+                        language = language or db_lang
+                except Exception as db_exc:
+                    print(f"Fallback to fetch code/language from database failed: {db_exc}")
+
+        if user_code and language and problem_refs:
+            testcases_str = problem_refs.get("hidden_testcases") or problem_refs.get("example_testcases") or problem_refs.get("sample_testcase")
+            pseudocode = problem_refs.get("pseudocode")
+            meta_data = problem_refs.get("meta_data")
+            if testcases_str and pseudocode and meta_data:
+                try:
+                    from services.code_runner.judge import evaluate_solution
+                    test_case_results = evaluate_solution(
+                        user_code=user_code,
+                        language=language,
+                        problem_meta_data=meta_data,
+                        testcases_str=testcases_str,
+                        reference_python_code=pseudocode
+                    )
+                except Exception as eval_exc:
+                    print(f"Failed to evaluate solution dynamically during feedback generation: {eval_exc}")
+
+    passed_count = sum(1 for tc in test_case_results if tc.get("passed"))
+    total_count = len(test_case_results)
+    
+    test_cases_summary = f"{passed_count}/{total_count} Passed"
+    if test_case_results:
+        summary_lines = []
+        for idx, tc in enumerate(test_case_results):
+            status_str = "Passed" if tc.get("passed") else f"Failed (Error/WA: {tc.get('error')})"
+            summary_lines.append(f"  - Case #{idx + 1}: {status_str}")
+        test_cases_summary += "\n" + "\n".join(summary_lines)
+
+    failed_cases = []
+    if test_case_results:
+        for idx, tc in enumerate(test_case_results):
+            if not tc.get("passed"):
+                failed_cases.append(
+                    {
+                        "index": idx + 1,
+                        "input": tc.get("input"),
+                        "expected": tc.get("expected"),
+                        "actual": tc.get("actual"),
+                        "error": tc.get("error"),
+                    }
+                )
+
+    failed_cases_summary = "None"
+    if failed_cases:
+        detail_lines = []
+        for fc in failed_cases:
+            detail_lines.append(
+                "  - Case #{index}: error={error}, input={input}, expected={expected}, actual={actual}".format(
+                    index=fc.get("index"),
+                    error=fc.get("error"),
+                    input=fc.get("input"),
+                    expected=fc.get("expected"),
+                    actual=fc.get("actual"),
+                )
+            )
+        failed_cases_summary = "\n".join(detail_lines)
+
     context_message = HumanMessage(
         content=(
             f"**Internal Assessment State:**\n"
             f"Discussion Assessment: {discussion_assessment}\n"
             f"Coding Assessment: {coding_assessment}\n"
             f"Review Assessment: {review_assessment}\n\n"
+            f"**Code Execution Results (Judge0):**\n"
+            f"Test Cases: {test_cases_summary}\n\n"
+            f"Failed Cases Details:\n{failed_cases_summary}\n\n"
             f"**Session Metrics:**\n"
             f"Time spent (seconds): {total_time}\n"
             f"Total Submissions Evaluated: {total_submissions}\n"
@@ -587,11 +670,59 @@ def feedback_phase_node(state):
 
     assistant_message = AIMessage(content=res.response)
 
-    fb_dict = res.feedback.model_dump()
+    fb_dict = res.feedback.model_dump() if hasattr(res.feedback, "model_dump") else res.feedback
     fb_dict["session_summary"]["time_spent_seconds"] = total_time
+    fb_dict["test_cases"] = test_case_results
+
+    if test_case_results:
+        passed_count = sum(1 for tc in test_case_results if tc.get("passed"))
+        total_count = len(test_case_results)
+
+        scores = fb_dict.get("scores", {})
+        session_summary = fb_dict.get("session_summary", {})
+        verdict = fb_dict.get("final_verdict", {})
+
+        ca_score = scores.get("complexity_analysis", {}).get("score")
+        comm_score = scores.get("communication", {}).get("score")
+        ps_score = scores.get("problem_solving", {}).get("score")
+
+        if isinstance(ps_score, int) and isinstance(ca_score, int) and isinstance(comm_score, int):
+            overall_score = int(round((ps_score * 0.4 + ca_score * 0.3 + comm_score * 0.3) * 10))
+            session_summary["overall_score"] = overall_score
+
+            if overall_score >= 90:
+                session_summary["performance_label"] = "Exceptional"
+                verdict["decision"] = "Strong Hire"
+            elif overall_score >= 75:
+                session_summary["performance_label"] = "Strong Performance"
+                verdict["decision"] = "Hire"
+            elif overall_score >= 60:
+                session_summary["performance_label"] = "Adequate"
+                verdict["decision"] = "Lean Hire"
+            elif overall_score >= 40:
+                session_summary["performance_label"] = "Below Expectations"
+                verdict["decision"] = "Lean No Hire"
+            elif overall_score >= 25:
+                session_summary["performance_label"] = "Poor"
+                verdict["decision"] = "No Hire"
+            else:
+                session_summary["performance_label"] = "Poor"
+                verdict["decision"] = "Strong No Hire"
+
+            fb_dict["session_summary"] = session_summary
+            fb_dict["final_verdict"] = verdict
+
+            evaluation_trace = fb_dict.get("evaluation_trace")
+            if not isinstance(evaluation_trace, list):
+                evaluation_trace = []
+            evaluation_trace.append(
+                f"[TEST CASES] Completed silent evaluation: {passed_count}/{total_count} passed."
+            )
+            fb_dict["evaluation_trace"] = evaluation_trace
 
     return {
         "messages": [assistant_message],
         "phase": "FEEDBACK",
         "feedback": fb_dict,
+        "test_case_results": test_case_results,
     }

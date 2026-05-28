@@ -61,6 +61,12 @@ def fetch_session_overview(session_row: Interview_Session, problem_row: Problems
 			"example": problem_row.example,
 			"difficulty": problem_row.difficulty,
 			"expected_time": problem_row.expected_time,
+			"leetcode_slug": problem_row.leetcode_slug,
+			"leetcode_url": problem_row.leetcode_url,
+			"code_snippets": problem_row.code_snippets,
+			"meta_data": problem_row.meta_data,
+			"example_testcases": problem_row.example_testcases,
+			"sample_testcase": problem_row.sample_testcase,
 		}
 	return overview
 
@@ -132,9 +138,11 @@ def fetch_session_feedback(db: Session, session_uuid: uuid.UUID) -> dict | None:
 	if not feedback:
 		return None
 
+	fb_json = feedback.feedback_json or {}
 	return {
 		"session_id": str(feedback.session_id),
-		"feedback": feedback.feedback_json,
+		"feedback": fb_json,
+		"test_cases": fb_json.get("test_cases", []),
 		"created_at": feedback.created_at,
 	}
 

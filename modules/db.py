@@ -40,6 +40,11 @@ class Problems(SQLModel,table=True):
     leetcode_slug: Optional[str] = Field(default=None, index=True, nullable=True)
     leetcode_url: Optional[str] = Field(default=None, nullable=True)
     user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.user_id", nullable=True)
+    code_snippets: Optional[list] = Field(default=None, sa_column=Column(JSONB, nullable=True))
+    meta_data: Optional[dict] = Field(default=None, sa_column=Column(JSONB, nullable=True))
+    example_testcases: Optional[str] = Field(default=None, nullable=True)
+    sample_testcase: Optional[str] = Field(default=None, nullable=True)
+    hidden_testcases: Optional[str] = Field(default=None, nullable=True)
 
 class User_Problem_Status(SQLModel,table=True):
     user_id: uuid.UUID = Field(
@@ -112,8 +117,10 @@ class Problem_Reference(SQLModel, table=True):
     time_complexity: str
     space_complexity: str
     key_insights: str
-    common_pitfalls: str | None = None
+    common_pitfalls: Optional[str] = Field(default=None, nullable=True)
     pseudocode: str | None = None
+    pseudocode_cpp: str | None = None
+    pseudocode_java: str | None = None
 
 
 engine = create_engine(
@@ -131,6 +138,14 @@ def create_db_and_table():
         session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS leetcode_slug VARCHAR;"))
         session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS leetcode_url VARCHAR;"))
         session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS user_id UUID;"))
+        session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS code_snippets JSONB;"))
+        session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS meta_data JSONB;"))
+        session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS example_testcases VARCHAR;"))
+        session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS sample_testcase VARCHAR;"))
+        session.exec(text("ALTER TABLE problems ADD COLUMN IF NOT EXISTS hidden_testcases VARCHAR;"))
+        session.exec(text("ALTER TABLE problem_reference ADD COLUMN IF NOT EXISTS common_pitfalls VARCHAR;"))
+        session.exec(text("ALTER TABLE problem_reference ADD COLUMN IF NOT EXISTS pseudocode_cpp VARCHAR;"))
+        session.exec(text("ALTER TABLE problem_reference ADD COLUMN IF NOT EXISTS pseudocode_java VARCHAR;"))
         try:
             session.exec(text("DROP INDEX IF EXISTS ix_problems_leetcode_slug;"))
         except Exception:

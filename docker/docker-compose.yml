@@ -29,6 +29,7 @@ services:
       - REDIS_PORT=6379
       - CODE_EXECUTION_PATH=/tmp/code-execution
       - CODE_VOLUME_NAME=bigoyu_code-execution
+      - JUDGE0_URL=http://judge0:2358
     depends_on:
       redis:
         condition: service_healthy
@@ -49,12 +50,46 @@ services:
       - REDIS_PORT=6379
       - CODE_EXECUTION_PATH=/tmp/code-execution
       - CODE_VOLUME_NAME=bigoyu_code-execution
+      - JUDGE0_URL=http://judge0:2358
     depends_on:
       redis:
         condition: service_healthy
     networks:
       - bigoyu-net
     restart: unless-stopped
+
+  judge0-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0
+    volumes:
+      - judge0-db-data:/var/lib/postgresql/data
+    networks:
+      - bigoyu-net
+    restart: unless-stopped
+
+  judge0:
+    image: judge0/judge0:1.13.0
+    ports:
+      - "2358:2358"
+    privileged: true
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0
+    depends_on:
+      - redis
+      - judge0-db
+    networks:
+      - bigoyu-net
+    restart: unless-stopped
+
 
 networks:
   bigoyu-net:
@@ -63,4 +98,5 @@ networks:
 volumes:
   redis-data:
   code-execution:
+  judge0-db-data:
 

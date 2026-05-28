@@ -23,6 +23,86 @@ class GeneratedProblemDetails(BaseModel):
     key_insights: str = Field(description="Key observations or mathematical properties needed to solve the problem efficiently.")
     common_pitfalls: str = Field(description="Common mistakes, edge cases, or suboptimal approaches candidates make.")
     pseudocode: str = Field(description="Clean, well-commented, complete, and syntactically correct Python solution code.")
+    pseudocode_cpp: str = Field(description="Clean, well-commented, complete, and syntactically correct C++ solution code inside the Solution class.")
+    pseudocode_java: str = Field(description="Clean, well-commented, complete, and syntactically correct Java solution code inside the Solution class.")
+
+class HiddenTestcaseInput(BaseModel):
+    inputs: List[str] = Field(description="A list of inputs. If the function takes K parameters, this list must contain K elements representing the values of the parameters in order (e.g. as strings or JSON strings).")
+
+class HiddenTestcasesList(BaseModel):
+    testcases: List[HiddenTestcaseInput] = Field(description="A list of 5-8 robust edge-case test cases.")
+
+def generate_and_validate_hidden_testcases(
+    title: str,
+    statement: str,
+    parsed_meta: dict,
+    example_testcases: Optional[str],
+    sample_testcase: Optional[str],
+    pseudocode: str
+) -> str:
+    """
+    Generates 5-8 robust edge-case test cases using base_llm.
+    Validates them by executing against the Python reference solution.
+    If execution fails or cgroup/runner issues occur, falls back to example_testcases or sample_testcase.
+    """
+    params = parsed_meta.get("params", [])
+    num_params = len(params) if params else 1
+    
+    # Prompt the LLM to generate the test cases
+    prompt_text = f"""
+You are a QA engineer and algorithm tester.
+We are seeding a coding problem:
+Title: {title}
+Statement: {statement}
+Metadata: {json.dumps(parsed_meta)}
+Example test cases: {example_testcases or sample_testcase or "None"}
+
+Generate 5-8 robust edge-case test cases to validate solutions for this problem.
+Include inputs that test boundaries, edge cases, empty inputs (if allowed), large values, and typical scenarios.
+The problem requires exactly {num_params} parameters per test case.
+For each test case, you must provide exactly {num_params} values corresponding to the parameters in order: {', '.join(params) if params else 'input'}.
+"""
+    
+    try:
+        generated = base_llm.with_structured_output(HiddenTestcasesList).invoke(prompt_text)
+        
+        # Format the testcases into a single string
+        testcase_lines = []
+        for tc in generated.testcases:
+            # Validate parameter count per testcase
+            if len(tc.inputs) == num_params:
+                for param_val in tc.inputs:
+                    testcase_lines.append(str(param_val).strip())
+            else:
+                print(f"Warning: Test case had {len(tc.inputs)} inputs, expected {num_params}. Skipping.")
+                
+        testcases_str = "\n".join(testcase_lines)
+        
+        # Now validate it by running against the Python reference solution
+        if testcases_str:
+            from services.code_runner.judge import submit_to_judge0
+            from services.code_runner.template_generator import generate_wrapper
+            
+            wrapped_ref_code = generate_wrapper(
+                user_code=pseudocode,
+                language="python",
+                meta_data=parsed_meta,
+                testcase_str=testcases_str
+            )
+            
+            ref_run = submit_to_judge0(wrapped_ref_code, "python")
+            
+            if ref_run.get("status") == "success" and ref_run.get("status_id") == 3:
+                print(f"Successfully validated {len(generated.testcases)} generated hidden test cases for '{title}'.")
+                return testcases_str
+            else:
+                print(f"Validation failed for generated test cases. Status ID: {ref_run.get('status_id')}, Error: {ref_run.get('stderr') or ref_run.get('compile_output')}")
+    except Exception as e:
+        print(f"Error generating/validating hidden test cases for '{title}': {e}")
+        
+    print(f"Falling back to example/sample test cases for '{title}'.")
+    fallback = example_testcases or sample_testcase or ""
+    return fallback
 
 def clean_html(html_content: str) -> str:
     if not html_content:
@@ -53,6 +133,8 @@ async def fetch_leetcode_question(title_slug: str) -> dict:
     query = """
     query questionData($titleSlug: String!) {
       question(titleSlug: $titleSlug) {
+        questionId
+        questionFrontendId
         title
         titleSlug
         content
@@ -66,6 +148,11 @@ async def fetch_leetcode_question(title_slug: str) -> dict:
           langSlug
           code
         }
+        exampleTestcases
+        sampleTestCase
+        metaData
+        hints
+        stats
         isPaidOnly
       }
     }
@@ -319,10 +406,37 @@ Generate the detailed evaluation reference data for this coding problem:
 4. `time_complexity` & `space_complexity`: Provide Big-O complexities.
 5. `key_insights`: List key insights or observations needed to solve the problem.
 6. `common_pitfalls`: List common bugs, edge cases, and pitfalls.
-7. `pseudocode`: Wrote a complete, production-ready, fully commented Python solution matching the optimal approach.
+7. `pseudocode`: Write a complete, production-ready, fully commented Python solution matching the optimal approach.
+8. `pseudocode_cpp`: Write a complete, production-ready, fully commented C++ solution matching the optimal approach, matching the class/method structure from the C++ starter template if provided.
+9. `pseudocode_java`: Write a complete, production-ready, fully commented Java solution matching the optimal approach, matching the class/method structure from the Java starter template if provided.
 """
                 generated = base_llm.with_structured_output(GeneratedProblemDetails).invoke(prompt_text)
                 
+                # Parse metaData string into a normalized dict
+                meta_str = leetcode_data.get("metaData")
+                parsed_meta = {}
+                if meta_str:
+                    try:
+                        meta_json = json.loads(meta_str)
+                        parsed_meta = {
+                            "raw": meta_json,
+                            "entry_method": meta_json.get("name"),
+                            "params": [p.get("type") for p in meta_json.get("params", [])] if meta_json.get("params") else [],
+                            "return_type": meta_json.get("return", {}).get("type") if meta_json.get("return") else None
+                        }
+                    except Exception:
+                        pass
+
+                # Generate and validate hidden test cases
+                hidden_testcases_str = generate_and_validate_hidden_testcases(
+                    title=leetcode_data["title"],
+                    statement=cleaned_statement,
+                    parsed_meta=parsed_meta,
+                    example_testcases=leetcode_data.get("exampleTestcases"),
+                    sample_testcase=leetcode_data.get("sampleTestCase"),
+                    pseudocode=generated.pseudocode
+                )
+
                 # 6. Save problem, reference, and topics within a single session transaction
                 with Session(engine) as session:
                     problem = Problems(
@@ -333,7 +447,12 @@ Generate the detailed evaluation reference data for this coding problem:
                         expected_time=generated.expected_time,
                         leetcode_slug=title_slug,
                         leetcode_url=f"https://leetcode.com/problems/{title_slug}/",
-                        user_id=uuid.UUID(user_id)
+                        user_id=uuid.UUID(user_id),
+                        code_snippets=leetcode_data.get("codeSnippets"),
+                        meta_data=parsed_meta,
+                        example_testcases=leetcode_data.get("exampleTestcases"),
+                        sample_testcase=leetcode_data.get("sampleTestCase"),
+                        hidden_testcases=hidden_testcases_str
                     )
                     session.add(problem)
                     session.commit()
@@ -346,7 +465,9 @@ Generate the detailed evaluation reference data for this coding problem:
                         space_complexity=generated.space_complexity,
                         key_insights=generated.key_insights,
                         common_pitfalls=generated.common_pitfalls,
-                        pseudocode=generated.pseudocode
+                        pseudocode=generated.pseudocode,
+                        pseudocode_cpp=generated.pseudocode_cpp,
+                        pseudocode_java=generated.pseudocode_java
                     )
                     session.add(ref)
                     

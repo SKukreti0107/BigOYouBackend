@@ -40,7 +40,9 @@ class InterviewAgentState(TypedDict):
     problem_references: Optional[Dict[str, Any]]
 
     user_code: Optional[str]
+    user_code_language: Optional[str]
     user_code_output: Optional[Dict[str, Any]]
+    test_case_results: Optional[List[Dict[str, Any]]]
     execution_attempts: int
 
     discussion_turns: int
@@ -145,6 +147,7 @@ class FeedbackItem(BaseModel):
     key_metrics: KeyMetrics
     final_verdict: Verdict
     evaluation_trace: List[str] = Field(description="A step-by-step trace log of how the evaluation was generated, checking milestones, checking penalties, and verifying complexities.")
+    test_cases: Optional[List[Dict[str, Any]]] = Field(default=None, description="Detailed test case outcomes")
 
 
 class FeedbackResponseFormat(BaseModel):

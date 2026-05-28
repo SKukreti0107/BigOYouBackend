@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from sqlmodel import Session, select, col
 from helpers.redis.redis_client import redis_conn
 from services.ai_agent.langgraph_agent.llm import base_llm
-from routers.problems import fetch_leetcode_question, clean_html, parse_leetcode_slug, GeneratedProblemDetails, LeetCodeImportRequest
+from routers.problems import fetch_leetcode_question, clean_html, parse_leetcode_slug, GeneratedProblemDetails, LeetCodeImportRequest, generate_and_validate_hidden_testcases
 
 from helpers.auth.auth_deps import get_current_user
 from modules.db import (
@@ -116,6 +116,8 @@ def get_problem(problem_id: str, _admin: str = Depends(require_admin)):
                 "key_insights": ref.key_insights,
                 "common_pitfalls": ref.common_pitfalls,
                 "pseudocode": ref.pseudocode,
+                "pseudocode_cpp": ref.pseudocode_cpp,
+                "pseudocode_java": ref.pseudocode_java,
             }
 
         return {
@@ -127,6 +129,13 @@ def get_problem(problem_id: str, _admin: str = Depends(require_admin)):
             "expected_time": p.expected_time,
             "topics": topics,
             "reference": ref_data,
+            "leetcode_slug": p.leetcode_slug,
+            "leetcode_url": p.leetcode_url,
+            "code_snippets": p.code_snippets,
+            "meta_data": p.meta_data,
+            "example_testcases": p.example_testcases,
+            "sample_testcase": p.sample_testcase,
+            "hidden_testcases": p.hidden_testcases,
         }
 
 
@@ -148,7 +157,12 @@ def create_problem(payload: ProblemCreateRequest, _admin: str = Depends(require_
             expected_time=payload.expected_time,
             leetcode_slug=payload.leetcode_slug,
             leetcode_url=payload.leetcode_url,
-            user_id=None # Admin seeded problems are always global
+            user_id=None, # Admin seeded problems are always global
+            code_snippets=payload.code_snippets,
+            meta_data=payload.meta_data,
+            example_testcases=payload.example_testcases,
+            sample_testcase=payload.sample_testcase,
+            hidden_testcases=payload.hidden_testcases,
         )
         db.add(problem)
         db.flush()  # Get the problem_id
@@ -166,7 +180,9 @@ def create_problem(payload: ProblemCreateRequest, _admin: str = Depends(require_
                 space_complexity=payload.space_complexity or "O(1)",
                 key_insights=payload.key_insights or "",
                 common_pitfalls=payload.common_pitfalls,
-                pseudocode=payload.pseudocode
+                pseudocode=payload.pseudocode,
+                pseudocode_cpp=payload.pseudocode_cpp,
+                pseudocode_java=payload.pseudocode_java
             )
             db.add(ref)
 
@@ -200,6 +216,16 @@ def update_problem(problem_id: str, payload: ProblemUpdateRequest, _admin: str =
             p.difficulty = payload.difficulty
         if payload.expected_time is not None:
             p.expected_time = payload.expected_time
+        if payload.code_snippets is not None:
+            p.code_snippets = payload.code_snippets
+        if payload.meta_data is not None:
+            p.meta_data = payload.meta_data
+        if payload.example_testcases is not None:
+            p.example_testcases = payload.example_testcases
+        if payload.sample_testcase is not None:
+            p.sample_testcase = payload.sample_testcase
+        if payload.hidden_testcases is not None:
+            p.hidden_testcases = payload.hidden_testcases
 
         # Replace topics if provided
         if payload.topics is not None:
@@ -210,6 +236,16 @@ def update_problem(problem_id: str, payload: ProblemUpdateRequest, _admin: str =
                 db.delete(t)
             for topic_name in payload.topics:
                 db.add(Problem_topics(problem_id=p.problem_id, topic=topic_name.strip()))
+
+        # Update reference solutions if provided
+        if payload.pseudocode_cpp is not None or payload.pseudocode_java is not None:
+            ref = db.exec(select(Problem_Reference).where(Problem_Reference.problem_id == p.problem_id)).first()
+            if ref:
+                if payload.pseudocode_cpp is not None:
+                    ref.pseudocode_cpp = payload.pseudocode_cpp
+                if payload.pseudocode_java is not None:
+                    ref.pseudocode_java = payload.pseudocode_java
+                db.add(ref)
 
         db.add(p)
         db.commit()
@@ -307,13 +343,40 @@ Generate the detailed evaluation reference data for this coding problem:
 4. `time_complexity` & `space_complexity`: Provide Big-O complexities.
 5. `key_insights`: List key insights or observations needed to solve the problem.
 6. `common_pitfalls`: List common bugs, edge cases, and pitfalls.
-7. `pseudocode`: Wrote a complete, production-ready, fully commented Python solution matching the optimal approach.
+7. `pseudocode`: Write a complete, production-ready, fully commented Python solution matching the optimal approach.
+8. `pseudocode_cpp`: Write a complete, production-ready, fully commented C++ solution matching the optimal approach, matching the class/method structure from the C++ starter template if provided.
+9. `pseudocode_java`: Write a complete, production-ready, fully commented Java solution matching the optimal approach, matching the class/method structure from the Java starter template if provided.
 """
         generated = base_llm.with_structured_output(GeneratedProblemDetails).invoke(prompt_text)
         
         topics = [t.get("name") for t in leetcode_data.get("topicTags", []) if t.get("name")]
         if not topics:
             topics = ["LeetCode Seed"]
+
+        # Parse metaData string into a normalized dict
+        meta_str = leetcode_data.get("metaData")
+        parsed_meta = {}
+        if meta_str:
+            try:
+                meta_json = json.loads(meta_str)
+                parsed_meta = {
+                    "raw": meta_json,
+                    "entry_method": meta_json.get("name"),
+                    "params": [p.get("type") for p in meta_json.get("params", [])] if meta_json.get("params") else [],
+                    "return_type": meta_json.get("return", {}).get("type") if meta_json.get("return") else None
+                }
+            except Exception:
+                pass
+
+        # Generate and validate hidden test cases
+        hidden_testcases_str = generate_and_validate_hidden_testcases(
+            title=leetcode_data["title"],
+            statement=cleaned_statement,
+            parsed_meta=parsed_meta,
+            example_testcases=leetcode_data.get("exampleTestcases"),
+            sample_testcase=leetcode_data.get("sampleTestCase"),
+            pseudocode=generated.pseudocode
+        )
             
         return {
             "title": leetcode_data["title"],
@@ -328,8 +391,15 @@ Generate the detailed evaluation reference data for this coding problem:
             "key_insights": generated.key_insights,
             "common_pitfalls": generated.common_pitfalls,
             "pseudocode": generated.pseudocode,
+            "pseudocode_cpp": generated.pseudocode_cpp,
+            "pseudocode_java": generated.pseudocode_java,
             "leetcode_slug": title_slug,
-            "leetcode_url": f"https://leetcode.com/problems/{title_slug}/"
+            "leetcode_url": f"https://leetcode.com/problems/{title_slug}/",
+            "code_snippets": leetcode_data.get("codeSnippets"),
+            "meta_data": parsed_meta,
+            "example_testcases": leetcode_data.get("exampleTestcases"),
+            "sample_testcase": leetcode_data.get("sampleTestCase"),
+            "hidden_testcases": hidden_testcases_str,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to preview import: {str(e)}")
@@ -357,6 +427,8 @@ def get_reference(problem_id: str, _admin: str = Depends(require_admin)):
             "key_insights": ref.key_insights,
             "common_pitfalls": ref.common_pitfalls,
             "pseudocode": ref.pseudocode,
+            "pseudocode_cpp": ref.pseudocode_cpp,
+            "pseudocode_java": ref.pseudocode_java,
         }
 
 
@@ -385,6 +457,8 @@ def create_reference(problem_id: str, payload: ReferenceCreateRequest, _admin: s
             key_insights=payload.key_insights,
             common_pitfalls=payload.common_pitfalls,
             pseudocode=payload.pseudocode,
+            pseudocode_cpp=payload.pseudocode_cpp,
+            pseudocode_java=payload.pseudocode_java,
         )
         db.add(ref)
         db.commit()
@@ -413,6 +487,10 @@ def update_reference(problem_id: str, payload: ReferenceUpdateRequest, _admin: s
             ref.common_pitfalls = payload.common_pitfalls
         if payload.pseudocode is not None:
             ref.pseudocode = payload.pseudocode
+        if payload.pseudocode_cpp is not None:
+            ref.pseudocode_cpp = payload.pseudocode_cpp
+        if payload.pseudocode_java is not None:
+            ref.pseudocode_java = payload.pseudocode_java
 
         db.add(ref)
         db.commit()
@@ -468,5 +546,7 @@ def get_reference_by_session(session_id: str, user_id: str = Depends(get_current
                 "key_insights": ref.key_insights,
                 "common_pitfalls": ref.common_pitfalls,
                 "pseudocode": ref.pseudocode,
+                "pseudocode_cpp": ref.pseudocode_cpp,
+                "pseudocode_java": ref.pseudocode_java,
             }
         }

@@ -71,8 +71,15 @@ class ProblemCreateRequest(BaseModel):
     key_insights: str | None = None
     common_pitfalls: str | None = None
     pseudocode: str | None = None
+    pseudocode_cpp: str | None = None
+    pseudocode_java: str | None = None
     leetcode_slug: str | None = None
     leetcode_url: str | None = None
+    code_snippets: list[dict] | None = None
+    meta_data: dict | None = None
+    example_testcases: str | None = None
+    sample_testcase: str | None = None
+    hidden_testcases: str | None = None
 
 
 class ProblemUpdateRequest(BaseModel):
@@ -82,6 +89,13 @@ class ProblemUpdateRequest(BaseModel):
     difficulty: Literal["Easy", "Medium", "Hard"] | None = None
     expected_time: int | None = None
     topics: list[str] | None = None
+    code_snippets: list[dict] | None = None
+    meta_data: dict | None = None
+    example_testcases: str | None = None
+    sample_testcase: str | None = None
+    hidden_testcases: str | None = None
+    pseudocode_cpp: str | None = None
+    pseudocode_java: str | None = None
 
 
 class ReferenceCreateRequest(BaseModel):
@@ -91,6 +105,8 @@ class ReferenceCreateRequest(BaseModel):
     key_insights: str
     common_pitfalls: str | None = None
     pseudocode: str | None = None
+    pseudocode_cpp: str | None = None
+    pseudocode_java: str | None = None
 
 
 class ReferenceUpdateRequest(BaseModel):
@@ -100,3 +116,5 @@ class ReferenceUpdateRequest(BaseModel):
     key_insights: str | None = None
     common_pitfalls: str | None = None
     pseudocode: str | None = None
+    pseudocode_cpp: str | None = None
+    pseudocode_java: str | None = None

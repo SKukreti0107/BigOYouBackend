@@ -72,18 +72,38 @@ def run_code(code: str, language: str, timeout: int = 5) -> dict:
             stderr=True,
         )
 
+        exit_code = 0
         try:
             # Wait for container to finish with specific timeout
-            container.wait(timeout=timeout)
+            wait_res = container.wait(timeout=timeout)
+            if isinstance(wait_res, dict):
+                exit_code = wait_res.get("StatusCode", 0)
+            else:
+                exit_code = wait_res
         except Exception:
-            container.kill()
+            try:
+                container.kill()
+            except:
+                pass
+            try:
+                container.remove(force=True)
+            except:
+                pass
             return {"status": "error", "output": "Time Limit Exceeded"}
 
-        output = container.logs(stdout=True, stderr=True).decode()
-        container.remove(force=True)
+        stdout = container.logs(stdout=True, stderr=False).decode()
+        stderr = container.logs(stdout=False, stderr=True).decode()
+        output = stdout + stderr
+        try:
+            container.remove(force=True)
+        except:
+            pass
 
         return {
             "status": "success",
+            "exit_code": exit_code,
+            "stdout": stdout,
+            "stderr": stderr,
             "output": output
         }
 

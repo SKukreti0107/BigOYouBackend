@@ -124,6 +124,96 @@ def review(
     return res
 
 
+@router.post("/interview/judge")
+def judge_interview_code(
+    payload: PhaseRequest,
+    request: Request,
+    user_id: str = Depends(get_current_user),
+):
+    import uuid
+    from services.code_runner.judge import evaluate_solution
+    
+    graph = _get_graph_or_503(request)
+    config = {"configurable": {"thread_id": payload.session_id}}
+    
+    # 1. Fetch current graph state
+    snapshot = graph.get_state(config)
+    values = snapshot.values if snapshot and hasattr(snapshot, "values") else {}
+    
+    # 2. Get code and language from payload or fallback to graph state or database
+    code = payload.code
+    language = payload.language
+    
+    if not code or not language:
+        # Fallback to DB
+        with Session(engine) as db:
+            from .service import get_latest_code_and_language
+            db_code, db_lang = get_latest_code_and_language(db, uuid.UUID(payload.session_id))
+            code = code or db_code
+            language = language or db_lang
+
+    if not code or not language:
+        raise HTTPException(
+            status_code=400,
+            detail="No code or language found to judge."
+        )
+
+    # 3. Ensure we have the problem references (metadata, testcases, pseudocode)
+    problem_refs = values.get("problem_references")
+    if not problem_refs:
+        # Load problem context from DB
+        with Session(engine) as db:
+            from .service import get_session_or_404, load_problem_context
+            session_row = get_session_or_404(db, payload.session_id, user_id)
+            _, problem_refs = load_problem_context(db, session_row)
+            
+    if not problem_refs or not problem_refs.get("meta_data"):
+        raise HTTPException(
+            status_code=400,
+            detail="Problem metadata is not configured. Seed or re-import the problem."
+        )
+
+    # Prefer hidden_testcases, then example_testcases, then sample_testcase
+    testcases_str = problem_refs.get("hidden_testcases") or problem_refs.get("example_testcases") or problem_refs.get("sample_testcase")
+    if not testcases_str:
+        raise HTTPException(
+            status_code=400,
+            detail="No test cases configured for this problem."
+        )
+
+    pseudocode = problem_refs.get("pseudocode")
+    if not pseudocode:
+        raise HTTPException(
+            status_code=400,
+            detail="No reference python solution (pseudocode) seeded for this problem."
+        )
+
+    try:
+        # 4. Evaluate solution using Judge0
+        test_results = evaluate_solution(
+            user_code=code,
+            language=language,
+            problem_meta_data=problem_refs.get("meta_data"),
+            testcases_str=testcases_str,
+            reference_python_code=pseudocode
+        )
+        
+        # 5. Update graph state with test results, latest user_code, and user_code_language
+        graph.update_state(config, {
+            "test_case_results": test_results,
+            "user_code": code,
+            "user_code_language": language
+        })
+        
+        return {"status": "success", "test_cases": test_results}
+    except Exception as e:
+        print(f"Error evaluating solution in /interview/judge: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Silent evaluation failed: {str(e)}"
+        )
+
+
 @router.post("/interview/feedback")
 def feedback(
     payload: PhaseRequest,

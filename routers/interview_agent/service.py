@@ -74,6 +74,15 @@ def load_problem_context(db: Session, session_row: Interview_Session) -> tuple[s
         "key_insights": reference.key_insights,
         "common_pitfalls": reference.common_pitfalls,
         "pseudocode": reference.pseudocode,
+        "pseudocode_cpp": reference.pseudocode_cpp,
+        "pseudocode_java": reference.pseudocode_java,
+        "leetcode_slug": problem.leetcode_slug,
+        "leetcode_url": problem.leetcode_url,
+        "code_snippets": problem.code_snippets,
+        "meta_data": problem.meta_data,
+        "example_testcases": problem.example_testcases,
+        "sample_testcase": problem.sample_testcase,
+        "hidden_testcases": problem.hidden_testcases,
     } if reference else {}
 
     return problem.statement, references
@@ -87,6 +96,16 @@ def get_latest_code(db: Session, session_id: uuid.UUID) -> str:
         .limit(1)
     ).first()
     return latest.code if latest else ""
+
+
+def get_latest_code_and_language(db: Session, session_id: uuid.UUID) -> tuple[str, str]:
+    latest = db.exec(
+        select(Session_Code_State)
+        .where(Session_Code_State.session_id == session_id)
+        .order_by(Session_Code_State.created_at.desc())
+        .limit(1)
+    ).first()
+    return (latest.code, latest.language) if latest else ("", "")
 
 
 def build_initial_state(
@@ -172,6 +191,9 @@ def sync_runtime_state_before_turn(payload: PhaseRequest, graph):
     if payload.code:
         state_updates["user_code"] = payload.code
 
+    if payload.language:
+        state_updates["user_code_language"] = payload.language
+
     if payload.exit_clicked is not None:
         state_updates["exit_clicked"] = payload.exit_clicked
 
@@ -234,9 +256,10 @@ def sync_feedback_runtime_state(payload: PhaseRequest, graph, user_id: str):
             state_updates["total_submissions"] = metrics.total_submissions or 0
             state_updates["hints_used"] = metrics.hints_used or 0
 
-        latest_code = get_latest_code(db, session_row.session_id)
+        latest_code, latest_lang = get_latest_code_and_language(db, session_row.session_id)
         if latest_code:
             state_updates["user_code"] = latest_code
+            state_updates["user_code_language"] = latest_lang
 
         if payload.time_expired is not None:
             state_updates["time_expired"] = payload.time_expired
