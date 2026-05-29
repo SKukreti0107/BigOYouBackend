@@ -3,8 +3,6 @@ name: bigoyu
 services:
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     volumes:
       - redis-data:/data
     networks:
@@ -14,82 +12,107 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
 
   backend:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: shubhamk0107/bigoyou-backend:latest
+    container_name: bigoyu-backend
+
     ports:
       - "8000:8000"
+
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # Mount Docker socket
-      - code-execution:/tmp/code-execution          # Named volume for code execution
+      - /var/run/docker.sock:/var/run/docker.sock
+      - code-execution:/tmp/code-execution
+
+    env_file:
+      - ../.env
+
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - CODE_EXECUTION_PATH=/tmp/code-execution
-      - CODE_VOLUME_NAME=bigoyu_code-execution
-      - JUDGE0_URL=http://judge0:2358
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CODE_EXECUTION_PATH: /tmp/code-execution
+      CODE_VOLUME_NAME: bigoyu_code-execution
+      JUDGE0_URL: http://judge0:2358
+
     depends_on:
       redis:
         condition: service_healthy
+
     networks:
       - bigoyu-net
+
     restart: unless-stopped
 
   worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    image: shubhamk0107/bigoyou-backend:latest
+    container_name: bigoyu-worker
+
     command: rq worker code_queue --url redis://redis:6379
+
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # Mount Docker socket
-      - code-execution:/tmp/code-execution          # Named volume for code execution
+      - /var/run/docker.sock:/var/run/docker.sock
+      - code-execution:/tmp/code-execution
+
+    env_file:
+      - ../.env
+
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - CODE_EXECUTION_PATH=/tmp/code-execution
-      - CODE_VOLUME_NAME=bigoyu_code-execution
-      - JUDGE0_URL=http://judge0:2358
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CODE_EXECUTION_PATH: /tmp/code-execution
+      CODE_VOLUME_NAME: bigoyu_code-execution
+      JUDGE0_URL: http://judge0:2358
+
     depends_on:
       redis:
         condition: service_healthy
+
     networks:
       - bigoyu-net
+
     restart: unless-stopped
 
   judge0-db:
     image: postgres:16-alpine
+    container_name: judge0-db
+
     environment:
-      - POSTGRES_DB=judge0
-      - POSTGRES_USER=judge0
-      - POSTGRES_PASSWORD=judge0
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0
+
     volumes:
       - judge0-db-data:/var/lib/postgresql/data
+
     networks:
       - bigoyu-net
+
     restart: unless-stopped
 
   judge0:
     image: judge0/judge0:1.13.0
-    ports:
-      - "2358:2358"
+    container_name: judge0
+
     privileged: true
+
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - POSTGRES_HOST=judge0-db
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=judge0
-      - POSTGRES_USER=judge0
-      - POSTGRES_PASSWORD=judge0
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      POSTGRES_HOST: judge0-db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0
+
     depends_on:
       - redis
       - judge0-db
+
     networks:
       - bigoyu-net
-    restart: unless-stopped
 
+    restart: unless-stopped
 
 networks:
   bigoyu-net:
@@ -99,4 +122,3 @@ volumes:
   redis-data:
   code-execution:
   judge0-db-data:
-
