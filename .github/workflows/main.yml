@@ -1,4 +1,4 @@
-name: Deploy to Oracle Cloud
+name: Deploy BigOYou Backend
 
 on:
   push:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Login to Docker Hub
@@ -19,10 +19,15 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and Push Image
+      - name: Build and Push Docker Image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/interview-platform:latest .
-          docker push ${{ secrets.DOCKER_USERNAME }}/interview-platform:latest
+          docker build \
+            -f docker/Dockerfile \
+            -t shubhamk0107/bigoyou-backend:latest \
+            .
+
+          docker push \
+            shubhamk0107/bigoyou-backend:latest
 
       - name: Setup SSH
         run: |
@@ -34,11 +39,13 @@ jobs:
       - name: Deploy to Oracle VM
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-            cd yourrepo
 
-            docker compose -f docker-compose.prod.yml pull
+            cd ~/BigOYouBackend/docker
 
-            docker compose -f docker-compose.prod.yml up -d
+            docker compose pull
+
+            docker compose up -d
 
             docker image prune -af
+
           EOF
